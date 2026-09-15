@@ -1,0 +1,154 @@
+---
+title: "Installing Inscribe: The Mentalogue Compiler Toolchain"
+sidebarTitle: "Installation"
+description: "Install the Inscribe compiler toolchain by building from source with Cargo, using mntpack, or downloading a pre-built release binary for your platform."
+---
+
+Inscribe ships as a single CLI binary. You can get it in three ways: build it yourself with Cargo, install it through the `mntpack` package manager, or download a pre-built binary from the GitHub Releases page. All three methods produce the same `inscribe` binary.
+
+<Note>
+  The preferred way to install Inscribe is through [Stratum](https://github.com/MentalogueLang/Stratum) when it is available for your platform. The methods below are the current alternatives.
+</Note>
+
+## Prerequisites
+
+Regardless of the installation method you choose, you need the following:
+
+- **Rust toolchain** — Install from [rustup.rs](https://rustup.rs). Inscribe is built with stable Rust; any recent stable release works.
+- **Git** — Required to clone the repository when building from source.
+
+No external system libraries are needed. The workspace uses only pure-Rust crates.
+
+---
+
+## Option 1: Build from Source
+
+Building from source gives you the latest unreleased changes and is the recommended approach for contributors.
+
+<Steps>
+  <Step title="Clone the repository">
+    ```bash
+    git clone https://github.com/MentalogueLang/Inscribe.git
+    cd Inscribe
+    ```
+  </Step>
+
+  <Step title="Build the release binary">
+    ```bash
+    cargo build -p inscribe-cli --release
+    ```
+
+    Cargo compiles the `inscribe-cli` crate and all workspace dependencies. The output binary is placed at `target/release/inscribe-cli` on Linux or `target\release\inscribe-cli.exe` on Windows.
+  </Step>
+
+  <Step title="Add the binary to your PATH">
+    On Linux, copy or symlink the binary to a directory on your `PATH`:
+
+    ```bash
+    cp target/release/inscribe-cli ~/.local/bin/inscribe
+    ```
+
+    On Windows (PowerShell), copy the binary to a directory that is already on your `PATH`, or add `target\release` to it:
+
+    ```powershell
+    Copy-Item target\release\inscribe-cli.exe $env:USERPROFILE\bin\inscribe.exe
+    ```
+  </Step>
+
+  <Step title="Verify the installation">
+    ```bash
+    inscribe --help
+    ```
+
+    You should see the following usage output:
+
+    ```
+    usage:
+      inscribe check <input.mtl>
+      inscribe emit <asm|hir|mir|mlib|dwarf|debug> <input.mtl> [--target <linux-x86_64|windows-x86_64>] [-o <output>]
+      inscribe emit abi [--target <linux-x86_64|windows-x86_64>] [--stability <stable|experimental|internal>] [-o <output.mabi>]
+      inscribe build <input.mtl> [--sandbox] [--target <linux-x86_64|windows-x86_64>] [-o <output>]
+      inscribe run <input.mtl|input.smtl> [--sandbox] [--allow-stdin] [--allow-network]
+    ```
+  </Step>
+</Steps>
+
+---
+
+## Option 2: Install via mntpack
+
+`mntpack` is the Mentalogue package manager. The `-g` flag installs globally and `-r auto` picks the correct release for your platform automatically.
+
+```bash
+mntpack sync MentalogueLang/Inscribe -g -r auto
+```
+
+After the sync completes, `inscribe` is available on your `PATH` without any manual copy step.
+
+<Tip>
+  Re-run the same command to upgrade to the latest release. `mntpack sync` always resolves to the newest published version when `-r auto` is specified.
+</Tip>
+
+---
+
+## Option 3: Pre-built Release Binaries
+
+Pre-built binaries are published to the [GitHub Releases page](https://github.com/MentalogueLang/Inscribe/releases) for every tagged version. The current release is **0.2.2**.
+
+| Platform | Archive |
+|---|---|
+| Windows x86\_64 | `inscribe-0.2.2-windows-x64.zip` |
+| Linux x86\_64 | `inscribe-0.2.2-linux-x64.tar.gz` |
+
+Each archive contains the `inscribe-cli` (or `inscribe-cli.exe`) binary, the bundled `stdlib`, `README.md`, and `RELEASE_NOTE.md`.
+
+<Steps>
+  <Step title="Download the archive for your platform">
+    Navigate to the [Releases page](https://github.com/MentalogueLang/Inscribe/releases/tag/v0.2.2) and download the appropriate archive.
+  </Step>
+
+  <Step title="Extract the archive">
+    On Linux:
+
+    ```bash
+    tar -xzf inscribe-0.2.2-linux-x64.tar.gz
+    ```
+
+    On Windows (PowerShell):
+
+    ```powershell
+    Expand-Archive inscribe-0.2.2-windows-x64.zip -DestinationPath inscribe-0.2.2
+    ```
+  </Step>
+
+  <Step title="Add the binary to your PATH">
+    Move or copy the extracted binary to a location on your `PATH`, then verify with `inscribe --help`.
+  </Step>
+</Steps>
+
+<Warning>
+  The `stdlib` directory bundled in the archive must remain alongside the binary (or be placed where Inscribe can locate it on-device). Moving the binary without the stdlib will cause import resolution errors for standard library modules.
+</Warning>
+
+---
+
+## Verifying Your Installation
+
+Run the following to confirm Inscribe is installed correctly and to see the full command reference:
+
+```bash
+inscribe --help
+```
+
+Expected output:
+
+```
+usage:
+  inscribe check <input.mtl>
+  inscribe emit <asm|hir|mir|mlib|dwarf|debug> <input.mtl> [--target <linux-x86_64|windows-x86_64>] [-o <output>]
+  inscribe emit abi [--target <linux-x86_64|windows-x86_64>] [--stability <stable|experimental|internal>] [-o <output.mabi>]
+  inscribe build <input.mtl> [--sandbox] [--target <linux-x86_64|windows-x86_64>] [-o <output>]
+  inscribe run <input.mtl|input.smtl> [--sandbox] [--allow-stdin] [--allow-network]
+```
+
+If you see this output, Inscribe is ready to use. Head to the [Quickstart](/quickstart) to write and run your first Mentalogue program.

@@ -1,0 +1,110 @@
+{
+  "projectType": "cli-tool",
+  "projectName": "Inscribe",
+  "projectDescription": "Inscribe is the compiler toolchain for the Mentalogue Language (.mtl), providing lexing, parsing, type-checking, HIR/MIR lowering, native code generation, sandboxed execution, and a VS Code extension.",
+  "theme": "aspen",
+  "primaryColor": "#4A6FA5",
+  "lightColor": "#EBF0F8",
+  "darkColor": "#1C2A3A",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "installation",
+              "quickstart"
+            ]
+          },
+          {
+            "group": "Language Guide",
+            "pages": [
+              "language/syntax",
+              "language/types",
+              "language/functions",
+              "language/structs-enums",
+              "language/control-flow",
+              "language/imports-modules"
+            ]
+          },
+          {
+            "group": "Standard Library",
+            "pages": [
+              "stdlib/overview",
+              "stdlib/core",
+              "stdlib/io",
+              "stdlib/http"
+            ]
+          },
+          {
+            "group": "Tooling",
+            "pages": [
+              "tooling/vscode-extension",
+              "tooling/incremental-compilation"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "CLI Reference",
+        "groups": [
+          {
+            "group": "Commands",
+            "pages": [
+              "cli/overview",
+              "cli/check",
+              "cli/build",
+              "cli/run",
+              "cli/emit"
+            ]
+          },
+          {
+            "group": "Advanced",
+            "pages": [
+              "cli/targets",
+              "cli/sandbox",
+              "cli/abi"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Full compiler pipeline: lexer → parser → AST → HIR → MIR → native code",
+    "Native code generation for Linux x86_64 (ELF64) and Windows x86_64 (PE64)",
+    "Sandboxed MIR interpreter for safe, capability-controlled execution",
+    "Incremental disk-backed compilation cache with fingerprinting",
+    "Type inference and ownership checking",
+    "Module system with local imports and stdlib",
+    "MLIB binary library format with embedded source",
+    "DWARF debug info emission",
+    "FFI with ABI versioning and stability levels (stable, experimental, internal)",
+    "Compile-time evaluation (comptime interpreter)",
+    "VS Code extension with syntax highlighting, IntelliSense, and background diagnostics"
+  ],
+  "publicApiSurface": [
+    "inscribe check <input.mtl>",
+    "inscribe build <input.mtl> [--sandbox] [--target <linux-x86_64|windows-x86_64>] [-o <output>]",
+    "inscribe run <input.mtl|input.smtl> [--sandbox] [--allow-stdin] [--allow-network]",
+    "inscribe emit asm <input.mtl> [--target] [-o]",
+    "inscribe emit hir <input.mtl> [-o]",
+    "inscribe emit mir <input.mtl> [-o]",
+    "inscribe emit mlib <input.mtl> [--target] [-o]",
+    "inscribe emit dwarf <input.mtl> [-o]",
+    "inscribe emit debug <input.mtl> [-o]",
+    "inscribe emit abi [--target] [--stability <stable|experimental|internal>] [-o]",
+    "stdlib: core.math (abs_int, min_int, max_int, clamp_int, square_int, sign_int)",
+    "stdlib: core.string (len, byte_at, in_bounds, is_space, is_digit, is_hex_digit)",
+    "stdlib: core.bool (bool_to_int)",
+    "stdlib: core.result (unwrap_or_int, is_ok_int)",
+    "stdlib: io.console (write_int, write_bool, write_string, write_line_int, write_line_string, read_line_int)",
+    "stdlib: http.client (get)",
+    "SandboxPolicy { allow_stdout, allow_stdin, allow_network, deterministic_only }",
+    "Target: linux-x86_64, windows-x86_64",
+    "Stability: stable, experimental, internal"
+  ]
+}

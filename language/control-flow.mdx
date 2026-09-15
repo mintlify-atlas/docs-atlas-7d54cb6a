@@ -1,0 +1,243 @@
+---
+title: "Control Flow Expressions and Statements in Mentalogue"
+sidebarTitle: "Control Flow"
+description: "Complete guide to if/else expressions, while and for loops, match pattern matching, early return, and the try operator in Mentalogue."
+---
+
+Mentalogue is an expression-oriented language, which means most control-flow constructs produce a value as well as directing execution. `if` and `match` are expressions that return the value of the chosen branch. Loops are statements and do not produce a value. `return` and the `?` try operator provide early exit mechanisms.
+
+## `if` / `else`
+
+An `if` expression evaluates a boolean condition and executes one of two branches. When used as a value-producing expression, both branches must be present and must produce the same type.
+
+```
+fn main() -> int {
+    let value = 5
+
+    if value > 3 {
+        1 + value
+    } else {
+        0
+    }
+}
+```
+
+When the result is not needed — for example when calling a function purely for its side effects — you can write `if` without an `else`. The expression then has unit type.
+
+```
+fn greet_if_active(active: bool) {
+    if active {
+        write_line_string("hello")
+    }
+}
+```
+
+### `if` as an inline expression
+
+Because `if` is an expression, you can embed it directly inside a larger expression. This is used extensively in `calculator.mtl`:
+
+```
+fn calculate(left: int, right: int, op: int) -> int {
+    (if op == 0 {
+        left + right
+    } else {
+        0
+    }) + (if op == 1 {
+        left - right
+    } else {
+        0
+    })
+}
+```
+
+<Note>
+Both the `then` block and the `else` block are ordinary blocks — you can include multiple statements in them. The last expression in each block is the branch's value.
+</Note>
+
+## `while` Loop
+
+A `while` loop repeats its body as long as the condition remains `true`. It is a statement and does not produce a value.
+
+```
+fn count_down(n: int) {
+    while n > 0 {
+        write_line_int(n)
+        n = n - 1
+    }
+}
+```
+
+## `for` / `in` Loop
+
+A `for` loop iterates over a range or other iterable. The most common form uses the `..` range operator to produce a sequence of integers:
+
+```
+for i in 0..4 {
+    write_line_int(i)
+}
+```
+
+The range `0..4` produces the values `0`, `1`, `2`, and `3` — the upper bound is exclusive. The loop variable `i` is bound fresh on each iteration.
+
+<Tip>
+Ranges are the primary iterable in Mentalogue. More general iterables may be added in future versions of the language.
+</Tip>
+
+## `match` Expression
+
+`match` performs exhaustive pattern matching on a value. Each arm consists of a pattern, `=>`, and a result expression. The arms are tried in order and the first matching arm's expression is evaluated and returned.
+
+```
+fn score(value: Result<int, Error>) -> int {
+    match value {
+        Ok(inner) => inner
+        Err(_) => 0
+    }
+}
+```
+
+`match` is an expression — it returns the value of the matched arm, so all arms must produce the same type.
+
+### Pattern Kinds
+
+<Accordion title="Wildcard pattern">
+`_` matches any value and discards it. Use it as a catch-all final arm:
+
+```
+match k {
+    Kind.Object => 1
+    Kind.Array  => 2
+    _           => 0
+}
+```
+</Accordion>
+
+<Accordion title="Binding pattern">
+A bare identifier in a pattern position binds the matched value to a new name:
+
+```
+match n {
+    0     => "zero"
+    other => "non-zero"
+}
+```
+</Accordion>
+
+<Accordion title="Literal pattern">
+Integer, float, string, and boolean literals match exactly that value:
+
+```
+match code {
+    0 => "ok"
+    1 => "error"
+    _ => "unknown"
+}
+```
+</Accordion>
+
+<Accordion title="Path pattern">
+An enum variant path matches when the value is that specific variant:
+
+```
+match kind {
+    Kind.Invalid => 0
+    Kind.Object  => 1
+    Kind.Array   => 2
+    _            => 99
+}
+```
+</Accordion>
+
+<Accordion title="Constructor pattern">
+`Ok(inner)` and `Err(inner)` are constructor patterns that destructure a `Result` value and bind the inner payload:
+
+```
+fn score(value: Result<int, Error>) -> int {
+    match value {
+        Ok(inner) => inner
+        Err(_) => 0
+    }
+}
+```
+
+The wildcard `Err(_)` ignores the error payload. `Ok(inner)` binds the success value to `inner`.
+</Accordion>
+
+## `return`
+
+Use `return` to exit a function early and produce a specific value. The argument to `return` must match the function's declared return type.
+
+```
+fn safe_divide(left: int, right: int) -> int {
+    if right == 0 {
+        return 0
+    }
+    left / right
+}
+```
+
+A bare `return` with no argument is valid in functions that return unit.
+
+## `?` — Try Operator
+
+The postfix `?` operator is used on a `Result<T, Error>` expression. If the result is `Ok(value)`, it evaluates to `value`. If the result is `Err(error)`, it immediately returns the error from the enclosing function.
+
+```
+fn read_and_double(source: string) -> Result<int, Error> {
+    let n = parse_int(source)?
+    Ok(n * 2)
+}
+```
+
+<Warning>
+`?` can only be used inside a function whose return type is `Result<T, Error>`. Using it in a function that returns `int` or another non-`Result` type is a compile error.
+</Warning>
+
+## Examples from the Test Suite
+
+### Conditional expression with comparison (`control_flow.mtl`)
+
+```
+fn main() -> int {
+    let value = 5
+
+    if value > (0 + 3) {
+        1 + value
+    } else {
+        0
+    }
+}
+```
+
+### `Result` match with constructor patterns (`result_match.mtl`)
+
+```
+fn score(value: Result<int, Error>) -> int {
+    match value {
+        Ok(inner) => inner
+        Err(_) => 0
+    }
+}
+```
+
+### Standard library bool helpers (`core/bool.mtl`)
+
+The `bool_to_int` and `select_int` functions in the standard library are implemented entirely with `if` expressions, illustrating that `if` truly produces a value:
+
+```
+fn bool_to_int(value: bool) -> int {
+    if value {
+        1
+    } else {
+        0
+    }
+}
+
+fn select_int(condition: bool, when_true: int, when_false: int) -> int {
+    if condition {
+        when_true
+    } else {
+        when_false
+    }
+}
+```

@@ -1,0 +1,314 @@
+---
+title: "Inscribe Standard Library — Core Modules Reference"
+sidebarTitle: "Core Modules"
+description: "Complete reference for core.math, core.string, core.bool, and core.result — pure Mentalogue source helpers with zero OS dependencies."
+---
+
+The four `core.*` modules are written entirely in Mentalogue source and carry no direct operating-system dependencies. They are safe to import in any context — sandbox mode, determinism-checked pipelines, or plain CLI programs — and are the recommended building blocks for data transforms, guard clauses, and result handling.
+
+## core.math
+
+```
+import core.math
+```
+
+`core.math` provides integer arithmetic helpers that Mentalogue's built-in operators do not cover directly. Every function operates on `int` values only; floating-point arithmetic is not part of the current stdlib.
+
+### Functions
+
+#### `abs_int`
+
+```
+fn abs_int(value: int) -> int
+```
+
+Returns the absolute value of `value`. Negative inputs are negated; non-negative inputs are returned unchanged.
+
+#### `min_int`
+
+```
+fn min_int(left: int, right: int) -> int
+```
+
+Returns the smaller of the two arguments.
+
+#### `max_int`
+
+```
+fn max_int(left: int, right: int) -> int
+```
+
+Returns the larger of the two arguments.
+
+#### `clamp_int`
+
+```
+fn clamp_int(value: int, lower: int, upper: int) -> int
+```
+
+Returns `value` clamped to the inclusive range `[lower, upper]`. Implemented as `max_int(lower, min_int(value, upper))`.
+
+#### `clamp01_int`
+
+```
+fn clamp01_int(value: int) -> int
+```
+
+Convenience wrapper around `clamp_int` that fixes the range to `[0, 1]`. Useful for boolean-as-integer guard patterns.
+
+#### `square_int`
+
+```
+fn square_int(value: int) -> int
+```
+
+Returns `value * value`.
+
+#### `sign_int`
+
+```
+fn sign_int(value: int) -> int
+```
+
+Returns `1` if `value` is positive, `-1` if negative, and `0` if zero.
+
+#### `abs_diff_int`
+
+```
+fn abs_diff_int(left: int, right: int) -> int
+```
+
+Returns the absolute difference between `left` and `right`, equivalent to `abs_int(left - right)`.
+
+### Usage Example
+
+```
+import core.math
+
+fn main() -> int {
+    let a = -7
+    let b = 3
+
+    let biggest  = max_int(abs_int(a), b)   // 7
+    let distance = abs_diff_int(a, b)        // 10
+    let bounded  = clamp_int(biggest, 0, 5) // 5
+
+    0
+}
+```
+
+<Tip>
+  Use `sign_int` combined with `abs_int` to decompose a signed value into a magnitude and direction without branching in your own code.
+</Tip>
+
+---
+
+## core.string
+
+```
+import core.string
+```
+
+`core.string` exposes low-level string inspection. All operations work on the raw byte representation of the string — there is no Unicode-aware API at this layer. Character-class predicates accept the integer byte code returned by `byte_at`.
+
+<Note>
+  `core.string` internally imports `runtime.string` for `string_length` and raw byte access. You do not need to import `runtime.string` yourself.
+</Note>
+
+### Functions
+
+#### `len`
+
+```
+fn len(value: string) -> int
+```
+
+Returns the length of the string in bytes. For ASCII-only strings this equals the number of characters.
+
+#### `byte_at`
+
+```
+fn byte_at(value: string, index: int) -> int
+```
+
+Returns the raw byte code at the given zero-based index. Accessing an out-of-bounds index is undefined behaviour; always guard with `in_bounds` first.
+
+#### `in_bounds`
+
+```
+fn in_bounds(value: string, index: int) -> bool
+```
+
+Returns `true` if `index` is a valid position in `value` (i.e. `index >= 0 && index < len(value)`). Use this before every `byte_at` call in a loop.
+
+#### `is_space`
+
+```
+fn is_space(code: int) -> bool
+```
+
+Returns `true` for space (32), horizontal tab (9), carriage return (13), and line feed (10). Useful for whitespace-skipping parsers.
+
+#### `is_digit`
+
+```
+fn is_digit(code: int) -> bool
+```
+
+Returns `true` for the ASCII decimal digits `0`–`9` (byte codes 48–57).
+
+#### `is_hex_digit`
+
+```
+fn is_hex_digit(code: int) -> bool
+```
+
+Returns `true` for `0`–`9`, `A`–`F` (65–70), and `a`–`f` (97–102). Useful for parsing hex literals or UUID strings.
+
+### Usage Example
+
+```
+import core.string
+import io.console
+
+fn count_digits(s: string) -> int {
+    let i      = 0
+    let count  = 0
+
+    while in_bounds(s, i) {
+        let code = byte_at(s, i)
+        if is_digit(code) {
+            count = count + 1
+        }
+        i = i + 1
+    }
+
+    count
+}
+
+fn main() -> int {
+    write_line_int(count_digits("abc123def456"))  // 6
+    0
+}
+```
+
+---
+
+## core.bool
+
+```
+import core.bool
+```
+
+`core.bool` provides conversion helpers between Mentalogue's `bool` type and `int`, plus a conditional-select utility that avoids nested `if` expressions in purely arithmetic contexts.
+
+### Functions
+
+#### `bool_to_int`
+
+```
+fn bool_to_int(value: bool) -> int
+```
+
+Returns `1` for `true` and `0` for `false`. Commonly used when printing booleans as integers or accumulating flag counts.
+
+#### `int_to_bool`
+
+```
+fn int_to_bool(value: int) -> bool
+```
+
+Returns `false` when `value` is `0`, and `true` for any other integer.
+
+#### `select_int`
+
+```
+fn select_int(condition: bool, when_true: int, when_false: int) -> int
+```
+
+Returns `when_true` if `condition` is `true`, otherwise `when_false`. This is a typed ternary helper for integer arms — both branches must be `int` expressions.
+
+### Usage Example
+
+```
+import core.bool
+import io.console
+
+fn main() -> int {
+    let flag  = true
+    let as_n  = bool_to_int(flag)        // 1
+    let again = int_to_bool(0)           // false
+    let chose = select_int(flag, 42, -1) // 42
+
+    write_line_int(as_n)
+    write_line_bool(again)
+    write_line_int(chose)
+    0
+}
+```
+
+<Note>
+  The compiled `.mlib` artifact for `core.bool` exports `bool_to_int` and `select_int`. `int_to_bool` is included in the source but is not listed in the binary export table — use the `.mtl` source import path to access it.
+</Note>
+
+---
+
+## core.result
+
+```
+import core.result
+```
+
+`core.result` provides helpers for working with `Result<int, Error>` values. The current stdlib targets the `int` specialisation only; additional type specialisations will follow as the Mentalogue type system is extended.
+
+### Functions
+
+#### `unwrap_or_int`
+
+```
+fn unwrap_or_int(value: Result<int, Error>, fallback: int) -> int
+```
+
+Extracts the `Ok` payload from a `Result<int, Error>`. If the value is `Err`, returns `fallback` instead. Does not panic.
+
+#### `is_ok_int`
+
+```
+fn is_ok_int(value: Result<int, Error>) -> bool
+```
+
+Returns `true` if the result is `Ok`, `false` if it is `Err`. Use this before `unwrap_or_int` when you need to branch on success.
+
+### Usage Example
+
+```
+import core.result
+import io.console
+
+fn try_parse(code: int) -> Result<int, Error> {
+    if code >= 48 {
+        if code <= 57 {
+            Ok(code - 48)
+        } else {
+            Err(Error)
+        }
+    } else {
+        Err(Error)
+    }
+}
+
+fn main() -> int {
+    let r1 = try_parse(53)   // '5' -> Ok(5)
+    let r2 = try_parse(65)   // 'A' -> Err
+
+    write_line_int(unwrap_or_int(r1, -1))  // 5
+    write_line_int(unwrap_or_int(r2, -1))  // -1
+    write_line_bool(is_ok_int(r1))         // true
+    write_line_bool(is_ok_int(r2))         // false
+    0
+}
+```
+
+<Warning>
+  `core.result` is currently specialised for `Result<int, Error>`. Passing a `Result` of a different inner type will produce a compile-time type error. A generic variant is planned but not yet available.
+</Warning>

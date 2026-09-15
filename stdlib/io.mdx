@@ -1,0 +1,218 @@
+---
+title: "Inscribe Standard Library — I/O Console Reference"
+sidebarTitle: "I/O Console"
+description: "Complete reference for io.console: typed print helpers, newline, stdout flush, and integer stdin reading with sandbox capability notes."
+---
+
+The `io.console` module is the standard way to read from and write to the terminal in Mentalogue programs. It wraps the low-level `runtime.io` declarations behind named, type-safe functions so you never have to import the runtime boundary directly. The module also pulls in `core.bool` for the boolean-as-integer print helpers.
+
+```
+import io.console
+```
+
+Once imported, all console functions are available in the current file's scope with no prefix.
+
+## Print Functions
+
+### Without a Trailing Newline
+
+#### `write_int`
+
+```
+fn write_int(value: int)
+```
+
+Prints an integer to stdout. No newline is appended. Use `write_line_int` when you want the cursor to advance to the next line immediately.
+
+#### `write_bool`
+
+```
+fn write_bool(value: bool)
+```
+
+Prints a boolean to stdout as `true` or `false`. No newline is appended.
+
+#### `write_string`
+
+```
+fn write_string(value: string)
+```
+
+Prints a string to stdout. No newline is appended. The string is written as-is; no quoting or escaping is applied.
+
+### With a Trailing Newline
+
+#### `write_line_int`
+
+```
+fn write_line_int(value: int)
+```
+
+Prints an integer followed by a newline character. Equivalent to calling `write_int` then `newline`.
+
+#### `write_line_bool`
+
+```
+fn write_line_bool(value: bool)
+```
+
+Prints a boolean (`true` or `false`) followed by a newline character.
+
+#### `write_line_string`
+
+```
+fn write_line_string(value: string)
+```
+
+Prints a string followed by a newline character. This is the most commonly used print function for labelled output.
+
+### Boolean-as-Integer Variants
+
+#### `write_bool_as_int`
+
+```
+fn write_bool_as_int(value: bool)
+```
+
+Prints a boolean as its integer representation — `1` for `true`, `0` for `false` — without a newline. Useful when output must be machine-readable.
+
+#### `write_line_bool_as_int`
+
+```
+fn write_line_bool_as_int(value: bool)
+```
+
+Prints a boolean as `1` or `0` followed by a newline.
+
+### Paired Integer Output
+
+#### `write_pair_int`
+
+```
+fn write_pair_int(left: int, right: int)
+```
+
+Prints `left`, then a newline, then `right` — but does **not** append a trailing newline after `right`. Use `write_pair_int_line` when you need the cursor to advance past the second value.
+
+#### `write_pair_int_line`
+
+```
+fn write_pair_int_line(left: int, right: int)
+```
+
+Prints `left`, a newline, `right`, and a final trailing newline. Equivalent to `write_pair_int` followed by `newline`.
+
+## Control Functions
+
+#### `newline`
+
+```
+fn newline()
+```
+
+Prints a single newline character (`\n`). Useful when you want explicit control over line breaks between several `write_*` calls.
+
+#### `flush`
+
+```
+fn flush()
+```
+
+Flushes the stdout buffer. Mentalogue's runtime may buffer output for performance; call `flush` before waiting on user input, before spawning a subprocess, or at the end of programs that use `write_*` without `write_line_*`.
+
+## Reading from Stdin
+
+#### `read_line_int`
+
+```
+fn read_line_int() -> int
+```
+
+Reads one line from stdin, parses it as a decimal integer, and returns the result. Leading and trailing whitespace is stripped. If the line cannot be parsed as an integer the behaviour is runtime-defined.
+
+<Warning>
+  In sandbox mode, stdin access is disabled by default. You must pass the `--allow-stdin` flag when running a program that calls `read_line_int`:
+
+  ```
+  inscribe run calculator.mtl --allow-stdin
+  ```
+
+  Without this flag, the call will produce a runtime error rather than a compile-time error.
+</Warning>
+
+## Runtime Boundary
+
+`io.console` is a thin wrapper. The following `runtime.io` declarations are what the module calls internally — they are provided by the compiler and are not available for direct use in application code without importing `runtime.io`:
+
+```
+fn print_int(value: int)
+fn print_bool(value: bool)
+fn print_string(value: string)
+fn print_newline()
+fn flush_stdout()
+fn read_int() -> int
+```
+
+You should not need to import `runtime.io` in your own programs; use `io.console` instead.
+
+## Complete Example
+
+The following is drawn directly from the calculator example in the Inscribe repository. It demonstrates the full round-trip of prompting for input, reading integers, computing a result, and printing it back.
+
+```
+import io.console
+
+fn safe_divide(left: int, right: int) -> int {
+    if right == 0 {
+        0
+    } else {
+        left / right
+    }
+}
+
+fn calculate(left: int, right: int, op: int) -> int {
+    (if op == 0 {
+        left + right
+    } else {
+        0
+    }) + (if op == 1 {
+        left - right
+    } else {
+        0
+    }) + (if op == 2 {
+        left * right
+    } else {
+        0
+    }) + (if op == 3 {
+        safe_divide(left, right)
+    } else {
+        0
+    })
+}
+
+fn main() -> int {
+    write_line_string("left")
+    let left = read_line_int()
+
+    write_line_string("right")
+    let right = read_line_int()
+
+    write_line_string("op: 0 add, 1 subtract, 2 multiply, 3 divide")
+    let op = read_line_int()
+
+    write_line_string("result")
+    write_line_int(calculate(left, right, op))
+
+    0
+}
+```
+
+Run it with:
+
+```
+inscribe run calculator.mtl --allow-stdin
+```
+
+<Tip>
+  Always call `flush()` or use the `write_line_*` variants before a `read_line_int` call. If stdout is buffered, the prompt string may not appear in the terminal before the program blocks waiting for input.
+</Tip>

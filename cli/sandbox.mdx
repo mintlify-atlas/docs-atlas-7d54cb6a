@@ -1,0 +1,111 @@
+---
+title: "Sandbox Mode: Safe Interpreted Execution in Inscribe"
+sidebarTitle: "Sandbox"
+description: "Run Mentalogue programs through the MIR interpreter with a configurable capability policy instead of compiling to a native executable."
+---
+
+Sandbox mode executes a Mentalogue program by running it through Inscribe's MIR interpreter rather than compiling it to a native binary. This makes execution platform-independent and allows fine-grained control over what system resources the program can access. A `SandboxPolicy` governs each run, specifying which capabilities — stdout, stdin, and network — are permitted. By default the sandbox enforces deterministic execution, meaning only pure computation and output are allowed unless you explicitly opt in to non-deterministic capabilities.
+
+## Two Ways to Use Sandbox Mode
+
+### Interpret Immediately
+
+Pass `--sandbox` to `inscribe run` to compile the source file to MIR and interpret it in a single step without writing any artifact to disk:
+
+```bash
+inscribe run calculator.mtl --sandbox
+inscribe run calculator.mtl --sandbox --allow-stdin
+```
+
+### Build Then Run
+
+Pass `--sandbox` to `inscribe build` to produce a `.smtl` file on disk. The `.smtl` file can then be run directly — without the source file present — using `inscribe run`:
+
+```bash
+inscribe build app.mtl --sandbox
+inscribe run app.smtl
+```
+
+<Tip>
+  The `.smtl` format is completely platform-independent. A sandbox artifact built on Linux can be run with `inscribe run` on Windows, and vice versa.
+</Tip>
+
+## The .smtl File Format
+
+A `.smtl` file begins with the five ASCII magic bytes `SMTL1`, followed immediately by the bincode-serialized MIR program. The magic header lets Inscribe detect and reject malformed or truncated files before attempting deserialization. If the header is missing or the MIR payload fails to decode, the runtime reports:
+
+```text
+invalid .smtl file: missing SMTL1 header
+```
+
+or
+
+```text
+invalid .smtl file: failed to decode MIR payload: <cause>
+```
+
+## Sandbox Policy and Capabilities
+
+Every sandbox run is governed by a `SandboxPolicy`. Three capabilities are defined:
+
+| Flag | Capability | Breaks Determinism |
+|---|---|---|
+| *(none — always enabled)* | `Stdout` | No |
+| `--allow-stdin` | `Stdin` | Yes |
+| `--allow-network` | `Network` | Yes |
+
+**`allow_stdout`** is always `true`. Programs can write to standard output in every sandbox run without any flag.
+
+**`allow_stdin`** is granted by `--allow-stdin`. Enabling it also marks the run as non-deterministic, so the `deterministic_only` guard no longer blocks stdin reads.
+
+**`allow_network`** is granted by `--allow-network`. Like stdin, enabling it marks the run as non-deterministic.
+
+**`deterministic_only`** defaults to `true`. When it is `true`, the policy's `allows()` check returns `false` for `Stdin` and `Network` even if those individual flags are set, acting as a second layer of defense. Passing either `--allow-stdin` or `--allow-network` sets `deterministic_only` to `false`.
+
+<Note>
+  The `Stdout` capability is never gated by `deterministic_only`. Writing to stdout is considered a pure side effect that does not compromise reproducibility.
+</Note>
+
+## Determinism Checking
+
+Before interpreting, Inscribe runs a MIR analysis pass (`find_nondeterministic_calls`) that walks every function and classifies each call site by the capabilities it requires. The analysis propagates transitively: if function `A` calls non-deterministic function `B`, then `A` is also marked non-deterministic.
+
+The classification rules are:
+
+| Function | Capability Required | Breaks Determinism |
+|---|---|---|
+| `print_int`, `print_bool`, `print_string`, `print_newline`, `flush_stdout` | `Filesystem` | **No** |
+| `string_length`, `string_byte_at` | *(none)* | No |
+| `read_int` | `Stdin` | **Yes** |
+| `http_get`, `http_serve_once` | `Network` | **Yes** |
+| Any unknown foreign function | `ForeignHost` | **Yes** |
+
+<Warning>
+  Calling an unknown foreign function always breaks determinism because Inscribe cannot reason about its side effects. If you need a foreign call in sandbox mode, declare it in an `ExternBlock` with a compatible `SandboxedExternBlock` policy, or use `--allow-network` / `--allow-stdin` as appropriate.
+</Warning>
+
+## Automatic Fallback
+
+When you run `inscribe run <file.mtl>` without `--sandbox` and the native code generator cannot handle a construct in the program, Inscribe automatically falls back to sandbox mode for that run. No flag is required; the fallback is transparent except for a diagnostic note printed to stderr.
+
+## Examples
+
+<CodeGroup>
+
+```bash Interpret with stdin
+inscribe run calculator.mtl --allow-stdin
+```
+
+```bash Build sandbox artifact
+inscribe build app.mtl --sandbox
+```
+
+```bash Run pre-built artifact
+inscribe run app.smtl
+```
+
+```bash Network-enabled sandbox run
+inscribe run fetcher.mtl --sandbox --allow-network
+```
+
+</CodeGroup>

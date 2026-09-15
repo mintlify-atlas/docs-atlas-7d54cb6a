@@ -1,0 +1,194 @@
+---
+title: "Types and Type Inference in the Mentalogue Language"
+sidebarTitle: "Types"
+description: "Covers Mentalogue's primitive types, arrays, Result, Error, type inference, explicit annotations, and cast expressions with annotated examples."
+---
+
+Mentalogue is a statically typed language. Every expression has a type that is either inferred by the compiler or supplied by the programmer through an explicit annotation. The Inscribe type-checker resolves all types before code generation, ensuring that type errors are reported at compile time rather than at runtime.
+
+## Primitive Types
+
+The following primitive types are built into the language:
+
+| Type     | Description                              |
+|----------|------------------------------------------|
+| `int`    | A signed integer                         |
+| `float`  | A floating-point number                  |
+| `bool`   | Boolean — `true` or `false`              |
+| `string` | An immutable sequence of characters      |
+
+```
+let count: int = 10
+let ratio: float = 0.5
+let active: bool = true
+let label: string = "hello"
+```
+
+## Unit Type
+
+Functions that do not return a meaningful value have the unit return type, written `()`. You do not need to write `-> ()` explicitly — simply omit the `->` annotation and the compiler infers unit.
+
+```
+fn greet(name: string) {
+    write_line_string(name)
+}
+```
+
+The unit type is also the result of `if` expressions without an `else` branch when used as statements.
+
+## Array Types
+
+Fixed-length arrays are written `[T; N]` where `T` is the element type and `N` is the compile-time length.
+
+```
+let flags: [bool; 4] = [true, false, true, false]
+let scores: [int; 3] = [10, 20, 30]
+```
+
+Array elements are accessed with the index operator `[]`.
+
+```
+let first = scores[0]
+```
+
+<Note>
+The length `N` is part of the type. `[int; 3]` and `[int; 5]` are different types and cannot be used interchangeably.
+</Note>
+
+You can also construct a fixed-length array by repeating a single value using the repeat-array syntax `[value; N]`:
+
+```
+let zeros: [int; 7] = [0; 7]
+```
+
+The `json.mtl` example in the standard library uses this pattern to build a lookup table:
+
+```
+let kind_from_code_table: [Kind; 7] = [
+    Kind.Invalid, Kind.Object, Kind.Array, Kind.String, Kind.Number, Kind.Bool, Kind.Null
+]
+```
+
+## The `Error` Type
+
+`Error` is a built-in type that represents a generic error value. It is used as the error variant in `Result<T, Error>`. You cannot construct an `Error` from a literal; error values are propagated from functions that return them or passed as parameters.
+
+## The `Result` Type
+
+`Result<T, E>` is a built-in generic type that represents either a successful value (`Ok(value)`) or an error (`Err(error)`). In practice the error type is almost always `Error`:
+
+```
+fn wrap(value: int) -> Result<int, Error> {
+    Ok(value)
+}
+
+fn rethrow(error: Error) -> Result<int, Error> {
+    Err(error)
+}
+```
+
+The standard library provides helper functions such as `unwrap_or_int` and `is_ok_int` for working with `Result<int, Error>`:
+
+```
+import core.result
+
+fn main() -> int {
+    let value = Ok(7)
+    unwrap_or_int(value, 0)
+}
+```
+
+## Type Inference
+
+When you declare a variable with `let` or `const` and provide an initializer, the compiler infers the type from the right-hand side. You do not need to write the annotation.
+
+```
+let base = 4        // inferred as int
+let ratio = 0.75    // inferred as float
+let name = "Ada"    // inferred as string
+let ok = true       // inferred as bool
+```
+
+The inferred type of a `let` binding is fixed for the lifetime of the binding. Assigning a value of a different type later in the same scope is a compile error.
+
+## Explicit Type Annotations
+
+You can always write the type explicitly with `: Type` after the binding name. This is required when the initializer alone is ambiguous, or when you want to document intent.
+
+```
+let score: int = 0
+let clamped: int = clamp_int(score, 0, 100)
+```
+
+Function parameters always require explicit type annotations:
+
+```
+fn add(left: int, right: int) -> int {
+    left + right
+}
+```
+
+<Warning>
+Assigning a value whose type does not match the annotated type is a compile error. For example, the following will be rejected:
+
+```
+let value: int = "oops"
+```
+</Warning>
+
+## Cast Expressions
+
+The `as` keyword performs a type cast. Currently the primary use is converting an enum variant to its underlying `int` discriminant:
+
+```
+enum Kind {
+    Invalid
+    Object
+}
+
+fn kind_code(kind: Kind) -> int {
+    kind as int
+}
+```
+
+<Tip>
+Cast is intentionally narrow. You cannot use `as` to reinterpret arbitrary types — it is designed for the specific enum-to-integer pattern used in low-level dispatch tables.
+</Tip>
+
+## Type Errors
+
+The compiler produces a type error whenever the inferred type of an expression does not match the expected type. Common cases include:
+
+- **Type mismatch** — assigning a `string` where an `int` is expected.
+- **Wrong arity** — calling a function with fewer or more arguments than it declares.
+- **Unknown field** — accessing a field that does not exist on a struct.
+
+<CodeGroup>
+```title="type_mismatch.mtl"
+fn main() -> int {
+    let value: int = "oops"
+    value
+}
+```
+
+```title="bad_call_arity.mtl"
+fn add(left: int, right: int) -> int {
+    left + right
+}
+
+fn main() -> int {
+    add(1)
+}
+```
+
+```title="unknown_field.mtl"
+struct User {
+    age: int
+}
+
+fn main() -> int {
+    let user = User { age: 3 }
+    user.name
+}
+```
+</CodeGroup>

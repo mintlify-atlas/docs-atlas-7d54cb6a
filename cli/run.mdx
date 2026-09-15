@@ -1,0 +1,124 @@
+---
+title: "inscribe run: Compile and Execute a Mentalogue Program"
+sidebarTitle: "run"
+description: "Compile a .mtl source file and execute it immediately, or run a pre-compiled .smtl sandbox artifact, with optional sandbox capability flags."
+---
+
+The `run` command compiles a Mentalogue source file and immediately executes it, combining the compilation and execution steps into a single invocation. It can also run pre-compiled `.smtl` sandbox artifacts directly, without re-compiling. When native code generation is unavailable for a program, `run` automatically falls back to the MIR sandbox interpreter and prints a warning — so you always get a result without needing to reach for `--sandbox` manually.
+
+## Synopsis
+
+```bash
+inscribe run <input.mtl|input.smtl> [--sandbox] [--allow-stdin] [--allow-network]
+```
+
+## Arguments and Flags
+
+<ParamField path="input.mtl | input.smtl" type="string" required>
+  Path to a `.mtl` source file to compile and run, or a pre-compiled `.smtl` sandbox artifact to decode and run directly. Exactly one positional argument is accepted.
+</ParamField>
+
+<ParamField query="--sandbox" type="boolean">
+  Force sandbox (MIR interpreter) execution instead of compiling to a native binary. Useful when you want a deterministic, capability-controlled execution environment.
+</ParamField>
+
+<ParamField query="--allow-stdin" type="boolean">
+  Enable stdin access inside the sandbox. Implies `--sandbox` automatically — there is no need to pass both flags.
+</ParamField>
+
+<ParamField query="--allow-network" type="boolean">
+  Enable HTTP network calls inside the sandbox. Implies `--sandbox` automatically — there is no need to pass both flags.
+</ParamField>
+
+## Execution Modes
+
+`run` selects an execution mode based on the input and flags:
+
+### 1. Native (default)
+
+When the input is a `.mtl` file and neither `--sandbox`, `--allow-stdin`, nor `--allow-network` is passed, `inscribe` compiles the program to a temporary native executable, runs it, and removes the temporary file afterwards. The exit code of the child process is reported to stdout.
+
+### 2. Sandbox
+
+When `--sandbox`, `--allow-stdin`, or `--allow-network` is passed, `inscribe` compiles the program to MIR and executes it through the built-in MIR interpreter under a `SandboxPolicy`. This mode is fully deterministic by default and does not require a C runtime or an OS loader.
+
+### 3. Pre-compiled `.smtl` artifact
+
+When the input file has a `.smtl` extension, `inscribe` decodes the `SMTL1` binary payload directly into MIR and runs it through the sandbox interpreter, regardless of other flags. No compilation step is needed.
+
+## Automatic Sandbox Fallback
+
+If native code generation encounters a construct it does not yet support, `run` automatically falls back to the sandbox and prints a warning to stderr:
+
+```text
+native backend unavailable: native codegen does not yet support closures. Falling back to sandbox execution.
+```
+
+<Note>
+  The automatic fallback always uses the default `SandboxPolicy`. If your program needs stdin or network access, pass `--allow-stdin` or `--allow-network` explicitly rather than relying on the fallback.
+</Note>
+
+## Sandbox Policy Defaults
+
+| Capability | Default | With `--allow-stdin` | With `--allow-network` |
+|---|:---:|:---:|:---:|
+| `allow_stdout` | ✅ | ✅ | ✅ |
+| `allow_stdin` | ❌ | ✅ | ❌ |
+| `allow_network` | ❌ | ❌ | ✅ |
+| `deterministic_only` | ✅ | ❌ | ❌ |
+
+<Warning>
+  `deterministic_only` is set to `true` by default. It is automatically disabled when `--allow-stdin` or `--allow-network` is passed, because those capabilities introduce non-deterministic input into the program.
+</Warning>
+
+## Output
+
+`run` prints the program's own stdout output as it executes. After the program completes, it prints:
+
+```text
+program exited with code <N>
+```
+
+If execution fails, the error is written to stderr and `inscribe` exits with code `1`.
+
+## Examples
+
+### Compile and run natively
+
+```bash
+inscribe run main.mtl
+```
+
+### Force sandbox execution
+
+```bash
+inscribe run main.mtl --sandbox
+```
+
+### Allow reading from stdin
+
+```bash
+inscribe run main.mtl --allow-stdin
+```
+
+### Allow outbound network calls
+
+```bash
+inscribe run main.mtl --allow-network
+```
+
+### Run a pre-compiled sandbox artifact
+
+```bash
+inscribe run build_output.smtl
+```
+
+### Enable both stdin and network access
+
+```bash
+inscribe run main.mtl --allow-stdin --allow-network
+```
+
+<Tip>
+  Use `inscribe build --sandbox` to produce a `.smtl` artifact you can distribute and then run with `inscribe run build_output.smtl` — no source code or recompilation needed on the target machine.
+</Tip>

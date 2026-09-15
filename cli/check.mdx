@@ -1,0 +1,100 @@
+---
+title: "inscribe check: Type-Check a Mentalogue Source File"
+sidebarTitle: "check"
+description: "Run the full Inscribe compilation pipeline through MIR on a .mtl file, report all errors, and exit without writing any output to disk."
+---
+
+The `check` command runs a Mentalogue source file through the complete compilation pipeline — loading the module graph, resolving symbols, type-checking, lowering to HIR, and lowering to MIR — and reports any errors it finds. Critically, it produces no output files. This makes it the fastest way to get diagnostic feedback on your code without touching the filesystem, and the right choice for CI validation steps or background checks run by a language-server extension.
+
+## Synopsis
+
+```bash
+inscribe check <input.mtl>
+```
+
+## Arguments
+
+<ParamField path="input.mtl" type="string" required>
+  Path to the entry `.mtl` source file. Exactly one positional argument is accepted; passing zero or more than one argument is an error.
+</ParamField>
+
+## What It Does
+
+When invoked, `check` runs the following pipeline in order:
+
+1. **Load** — resolves the module graph starting from `<input.mtl>`, reading all imported files.
+2. **Resolve** — binds all identifiers and resolves imports across the module graph.
+3. **Type-check** — verifies that every expression, binding, and function call is type-correct.
+4. **Lower to HIR** — converts the resolved AST to the High-level Intermediate Representation.
+5. **Lower to MIR** — converts HIR to the Mid-level Intermediate Representation, including MIR optimisation passes.
+
+If every stage succeeds, `check` prints a confirmation to stdout and exits with code `0`. If any stage fails, it prints the error to stderr and exits with code `1`. No output file is ever written.
+
+<Note>
+  `check` accepts **no flags**. There is no `--target` option because type-checking is target-independent. For target-specific output, use [`emit`](/cli/emit) or [`build`](/cli/build).
+</Note>
+
+## Output
+
+**On success:**
+
+```text
+check passed: <path>
+```
+
+**On failure** (stderr):
+
+```text
+error[E0042]: type mismatch — expected `Int`, found `String`
+  --> examples/json_parser/main.mtl:14:12
+```
+
+The exit code is `1` on any failure and `0` on success.
+
+## Examples
+
+### Successful check
+
+```bash
+$ inscribe check examples/json_parser/main.mtl
+check passed: examples/json_parser/main.mtl
+```
+
+### Type mismatch error
+
+```bash
+$ inscribe check examples/broken/type_mismatch.mtl
+error[typeck]: type mismatch — expected `Int`, found `String`
+```
+
+```bash
+$ echo $?
+1
+```
+
+### Using in a CI script
+
+```bash
+inscribe check src/main.mtl || exit 1
+```
+
+## Use Cases
+
+<CardGroup cols={2}>
+  <Card title="Fast feedback loop" icon="bolt">
+    Re-run `inscribe check` after every save to catch errors before attempting a full build. It skips codegen entirely, so it is significantly faster than `build`.
+  </Card>
+  <Card title="CI validation" icon="shield-check">
+    Add `inscribe check` as a required step in your pull-request pipeline to block merges that introduce type errors, without producing build artifacts.
+  </Card>
+  <Card title="Editor integration" icon="pen-to-square">
+    Language-server and VS Code extension integrations can invoke `check` as a background process on every file save to surface inline diagnostics.
+  </Card>
+  <Card title="Pre-commit hooks" icon="code-branch">
+    Run `inscribe check` inside a Git pre-commit hook to prevent committing source files that do not type-check.
+  </Card>
+</CardGroup>
+
+<Tip>
+  The compiler's incremental cache means that re-running `check` on an unchanged file is nearly instantaneous. The cache is stored in `.inscribe/cache/` alongside your entry file.
+</Tip>

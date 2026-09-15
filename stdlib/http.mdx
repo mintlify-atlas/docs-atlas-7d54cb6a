@@ -1,0 +1,111 @@
+---
+title: "Inscribe Standard Library — HTTP Client Reference"
+sidebarTitle: "HTTP Client"
+description: "Complete reference for http.client: perform HTTP GET requests from Mentalogue programs, with sandbox capability and determinism notes."
+---
+
+The `http.client` module lets Mentalogue programs fetch remote resources over HTTP. It is a thin, single-function wrapper around the `runtime.http` boundary declaration so that application code never has to import runtime modules directly. Because it reaches out to the network, it is subject to the sandbox capability system and the MIR determinism checker.
+
+```
+import http.client
+```
+
+## Functions
+
+### `get`
+
+```
+fn get(url: string) -> string
+```
+
+Performs an HTTP GET request to `url` and returns the full response body as a string. The call blocks until a response is received or the runtime's built-in timeout is reached.
+
+- The URL must be a fully-qualified HTTP or HTTPS address (e.g. `"https://example.com/api/data"`).
+- The entire response body is returned as a single string value. There is currently no streaming API.
+- HTTP headers and status codes are not exposed; only the body text is returned. If you need to inspect the status code, use `runtime.http` directly.
+- On network error or timeout, the runtime returns an empty string. Validate the result before processing.
+
+## Sandbox Capability
+
+Network access is blocked in Inscribe's default sandbox mode. Any program that imports `http.client` and calls `get` must be launched with the `--allow-network` flag:
+
+```
+inscribe run file.mtl --allow-network
+```
+
+<Warning>
+  Running without `--allow-network` will produce a **runtime capability error**, not a compile-time error. The program compiles successfully regardless; the restriction is enforced at execution time when the network call is attempted.
+</Warning>
+
+## Determinism
+
+Functions that call `get` are flagged as **non-deterministic** by the Inscribe MIR determinism checker. This means:
+
+- They cannot be inlined into a `const` context.
+- The compiler will emit a warning (and in strict mode, an error) if a non-deterministic call appears inside a function that is expected to be pure.
+- Calling code is transitively marked non-deterministic — keep HTTP calls at the boundary of your program rather than deep inside helper functions.
+
+<Note>
+  The MIR determinism checker traces non-determinism transitively. If `fetch_data` calls `get`, then any function that calls `fetch_data` is also flagged. Structure your programs so that I/O and network calls are confined to `main` or a small set of clearly labelled entry-point functions.
+</Note>
+
+## Runtime Boundary
+
+`http.client` wraps the following `runtime.http` declarations. The runtime module also exposes a server-side primitive that is not currently wrapped by any stdlib module:
+
+```
+fn http_get(url: string) -> string
+
+fn http_serve_once(
+    address: string,
+    status_code: int,
+    content_type: string,
+    body: string,
+    timeout_ms: int,
+) -> int
+```
+
+`http_get` is the backing declaration for `get`. `http_serve_once` listens for a single inbound HTTP request on `address`, responds with the supplied `status_code`, `content_type`, and `body`, waits up to `timeout_ms` milliseconds, and returns `1` on success or `0` on timeout. It has no `http.*` wrapper yet; import `runtime.http` directly if you need it.
+
+## Usage Example
+
+```
+import http.client
+import io.console
+
+fn main() -> int {
+    let body = get("https://example.com/api/data")
+    write_line_string(body)
+    0
+}
+```
+
+Run with network access enabled:
+
+```
+inscribe run fetch.mtl --allow-network
+```
+
+A more defensive pattern that checks for an empty response before processing:
+
+```
+import http.client
+import core.string
+import io.console
+
+fn main() -> int {
+    let body = get("https://example.com/api/status")
+
+    if len(body) == 0 {
+        write_line_string("error: empty response")
+        1
+    } else {
+        write_line_string(body)
+        0
+    }
+}
+```
+
+<Tip>
+  Combine `http.client` with `core.string` to inspect or walk the response body byte-by-byte. The JSON parser in `examples/json_parser/` shows a practical pattern for turning a raw string into structured data.
+</Tip>

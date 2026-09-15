@@ -1,0 +1,211 @@
+---
+title: "Mentalogue Language Syntax Reference (.mtl)"
+sidebarTitle: "Syntax"
+description: "A complete reference for Mentalogue (.mtl) syntax: keywords, literals, operators, identifiers, and statement structure with real code examples."
+---
+
+Mentalogue source files carry the `.mtl` extension and are parsed by the Inscribe compiler toolchain. The language has a clean, expression-oriented syntax where blocks produce values and newlines serve as statement boundaries — making the code feel lightweight while remaining unambiguous.
+
+## File Extension
+
+All Mentalogue source files use the `.mtl` extension. Pre-compiled library archives use `.mlib`. The compiler discovers source files by traversing dot-separated import paths relative to the project source root.
+
+## Statement Separators
+
+Newlines act as statement separators in Mentalogue. You do not need a semicolon at the end of every line — a newline after a complete expression or statement is sufficient. Semicolons are accepted and may be used to place multiple statements on a single line, but they are optional in the common case.
+
+```
+fn main() -> int {
+    let base = 4
+    let extra = 3
+    base + extra
+}
+```
+
+<Note>
+Closing braces (`}`), semicolons, and end-of-file are also treated as statement boundaries by the parser. You will rarely need an explicit semicolon.
+</Note>
+
+## Comments
+
+The current Mentalogue token set does not define a comment syntax. Documentation and inline notes should be placed in separate `.md` files or expressed through descriptive naming until a comment form is stabilised in a future release.
+
+## Identifiers
+
+Identifiers are sequences of ASCII letters, digits, and underscores. They must begin with a letter or underscore and are case-sensitive. `userName`, `user_name`, and `UserName` are three distinct identifiers.
+
+```
+let score = 0
+let player_name = "Ada"
+```
+
+## Keywords
+
+The following words are reserved and may not be used as identifiers:
+
+| Keyword   | Purpose                                      |
+|-----------|----------------------------------------------|
+| `let`     | Declare a mutable local binding              |
+| `const`   | Declare an immutable local binding           |
+| `fn`      | Declare a function or method                 |
+| `struct`  | Declare a struct type                        |
+| `enum`    | Declare an enum type                         |
+| `if`      | Conditional expression                       |
+| `else`    | Alternative branch of an `if`                |
+| `for`     | Iterator loop                                |
+| `in`      | Separates the binding from the iterable in `for` |
+| `while`   | Condition-based loop                         |
+| `return`  | Early return from a function                 |
+| `as`      | Cast expression (e.g. enum to `int`)         |
+| `import`  | Bring a module into scope                    |
+| `priv`    | Mark a function as private                   |
+| `match`   | Pattern-matching expression                  |
+
+## Literals
+
+### Integer literals
+
+Whole number values written as a sequence of digits.
+
+```
+let age = 42
+let offset = 0
+```
+
+### Float literals
+
+Decimal number values that include a `.` separator.
+
+```
+let ratio = 3.14
+let step = 0.5
+```
+
+### String literals
+
+Strings are written with double quotes. Escape sequences such as `\"` and `\\` are supported inside the string body.
+
+```
+let greeting = "Hello, world"
+let path = "src/main.mtl"
+```
+
+### Boolean literals
+
+The keywords `true` and `false` produce boolean values.
+
+```
+let active = true
+let done = false
+```
+
+## Operators
+
+### Arithmetic
+
+| Operator | Meaning        |
+|----------|----------------|
+| `+`      | Addition       |
+| `-`      | Subtraction / unary negation |
+| `*`      | Multiplication |
+| `/`      | Division       |
+
+```
+let sum = 10 + 3
+let product = 4 * 5
+let diff = sum - product
+```
+
+### Comparison
+
+| Operator | Meaning                  |
+|----------|--------------------------|
+| `==`     | Equal                    |
+| `!=`     | Not equal                |
+| `<`      | Less than                |
+| `<=`     | Less than or equal       |
+| `>`      | Greater than             |
+| `>=`     | Greater than or equal    |
+
+```
+fn is_positive(n: int) -> bool {
+    n > 0
+}
+```
+
+### Logical
+
+| Operator | Meaning          |
+|----------|------------------|
+| `&&`     | Logical AND      |
+| `\|\|`   | Logical OR       |
+| `!`      | Logical NOT      |
+
+```
+fn in_range(v: int) -> bool {
+    v >= 0 && v < 100
+}
+```
+
+### Range
+
+The `..` operator constructs a range value used with `for` loops.
+
+```
+for i in 0..4 {
+    write_line_int(i)
+}
+```
+
+### Assignment
+
+`=` assigns a new value to an existing binding. It is right-associative.
+
+```
+let count = 0
+count = count + 1
+```
+
+## Arrow Tokens
+
+`->` separates a function's parameter list from its return type annotation.
+
+`=>` separates a match pattern from its result expression in a `match` arm.
+
+```
+fn double(n: int) -> int {
+    n * 2
+}
+
+fn describe(n: int) -> string {
+    match n {
+        0 => "zero"
+        _ => "other"
+    }
+}
+```
+
+## Operator Precedence
+
+Operators are evaluated in the following order (highest last):
+
+| Level | Operators             | Associativity |
+|-------|-----------------------|---------------|
+| 1     | `=` (assignment)      | Right         |
+| 2     | `..` (range)          | Left          |
+| 3     | `\|\|`                | Left          |
+| 4     | `&&`                  | Left          |
+| 5     | `==`, `!=`            | Left          |
+| 6     | `<`, `<=`, `>`, `>=`  | Left          |
+| 7     | `+`, `-`              | Left          |
+| 8     | `*`, `/`              | Left          |
+
+Use parentheses to override the default precedence.
+
+```
+let result = (2 + 3) * 4
+```
+
+<Tip>
+When mixing arithmetic with comparisons in the same expression, add parentheses for clarity. The compiler will accept the precedence rules above, but parentheses make intent obvious to readers.
+</Tip>

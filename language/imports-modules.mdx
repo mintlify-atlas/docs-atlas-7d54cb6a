@@ -1,0 +1,217 @@
+---
+title: "Imports and Module System in the Mentalogue Language"
+sidebarTitle: "Imports & Modules"
+description: "How Mentalogue's import system works: path resolution, local modules, the stdlib, Suture packages, the .mlib format, visibility, and cycle detection."
+---
+
+Mentalogue organises code into **modules**, where each `.mtl` source file is a module. Modules are brought into scope with the `import` statement, and the compiler uses a dot-separated path to locate the corresponding file on disk. The same mechanism covers local project files, the built-in standard library, and externally distributed Suture packages.
+
+## The `import` Statement
+
+An import statement names the module you want to use:
+
+```
+import core.math
+import io.console
+import shared.json
+```
+
+Import statements must appear at the top of a file, before any function, struct, or enum declarations. They are the only item that may not be placed in a function body.
+
+Once a module is imported, all of its public functions and types become available in the current file without any additional qualification.
+
+## Module Resolution
+
+The dot-separated path in an `import` statement maps directly to a file path relative to the **source root** of the current project.
+
+Each `.` in the path corresponds to a directory separator:
+
+| Import path           | Resolved file                    |
+|-----------------------|----------------------------------|
+| `shared.json`         | `shared/json.mtl`                |
+| `shared.math_helpers` | `shared/math_helpers.mtl`        |
+| `core.math`           | standard library `core/math.mtl` |
+
+The compiler first searches the project source root, then falls back to the standard library, and finally searches Suture package directories.
+
+## Local Imports
+
+Local imports refer to `.mtl` files inside the same project. The path is resolved relative to the project source root.
+
+The following example from `import_local.mtl` imports a sibling helper module:
+
+```
+import shared.math_helpers
+
+fn main() -> int {
+    add_three(4)
+}
+```
+
+This resolves to `shared/math_helpers.mtl` in the project tree. All public functions exported by that file — such as `add_three` — are immediately available.
+
+The JSON parser example uses local imports to share parsing logic across files:
+
+```
+import core.bool
+import shared.json
+import io.console
+
+fn print_result(label: string, source: string) {
+    let result = parse_document(source)
+    write_line_string(label)
+    write_line_int(bool_to_int(result_ok(result)))
+    write_line_int(kind_code(result_kind(result)))
+}
+
+fn main() -> int {
+    print_result("object", "{\"a\":1,\"b\":2}")
+    print_result("array", "[null,false,true]")
+    print_result("invalid", "[1,2")
+    0
+}
+```
+
+`shared.json` resolves to `shared/json.mtl` adjacent to `main.mtl`.
+
+## Standard Library Imports
+
+The Mentalogue standard library is organised under top-level namespaces. Import a stdlib module the same way you import a local module — the compiler recognises stdlib roots automatically.
+
+| Import path       | Contents                                        |
+|-------------------|-------------------------------------------------|
+| `core.math`       | `square_int`, `clamp_int`, and arithmetic utils |
+| `core.result`     | `unwrap_or_int`, `is_ok_int`                    |
+| `core.bool`       | `bool_to_int`, `int_to_bool`, `select_int`      |
+| `core.string`     | String utility functions                        |
+| `io.console`      | `write_line_string`, `write_line_int`, `read_line_int` |
+| `http.client`     | HTTP request utilities                          |
+| `runtime.string`  | Low-level string intrinsics                     |
+
+The `import_stdlib.mtl` test imports two stdlib modules and uses functions from both:
+
+```
+import core.math
+import core.result
+
+fn main() -> int {
+    let value = Ok(7)
+    let clamped = clamp_int(unwrap_or_int(value, 3), 0, 9)
+    square_int(clamped)
+}
+```
+
+<Tip>
+You can import as many modules as you need. There is no namespace prefix required when calling imported functions — `clamp_int` is available directly, not as `core.math.clamp_int`.
+</Tip>
+
+## Suture Package Imports
+
+Suture is the Mentalogue package registry. Distributed libraries are stored in the `.suture/` directory of the project root, under the path:
+
+```
+.suture/mlib/<package>/<version>/
+```
+
+Each package is distributed as a compiled `.mlib` binary archive. Importing a Suture package uses the same dot-separated syntax:
+
+```
+import http.client
+import runtime.string
+```
+
+The compiler resolves these paths against the `.suture/mlib/` tree before reporting a missing module error.
+
+## The `.mlib` Binary Library Format
+
+`.mlib` is the pre-compiled library format for Mentalogue. A `.mlib` file bundles the compiled output of a module together with its embedded source text, allowing the compiler to type-check callers without recompiling the library from scratch.
+
+<Note>
+When you distribute a library, you ship the `.mlib` file rather than raw `.mtl` source. The embedded source is used only for diagnostics and IDE tooling — execution uses the compiled representation.
+</Note>
+
+## Module Visibility
+
+All top-level functions in a `.mtl` file are **public** by default and are exported to any file that imports the module. Mark a function **private** with the `priv` keyword to keep it internal:
+
+```
+priv fn kind_from_code(code: int) -> Kind {
+    // Not visible to importers
+}
+
+fn kind_code(kind: Kind) -> int {
+    kind as int
+}
+```
+
+In the example above, `kind_code` is exported and callable from any importing module. `kind_from_code` is private and invisible outside `json.mtl`.
+
+Struct and enum declarations are always exported when the module is imported.
+
+## Cycle Detection
+
+Circular imports produce a compile error. If module A imports module B and module B imports module A (directly or transitively), the compiler detects the cycle and reports an error rather than looping indefinitely.
+
+<Warning>
+Circular dependencies cannot be resolved by reordering import statements. The modules must be restructured so that dependencies flow in one direction.
+</Warning>
+
+## Example: Multi-Module Project Layout
+
+The `with_includes.mtl` example demonstrates a project that combines stdlib and local imports:
+
+```
+import core.math
+import io.console
+import shared.bonus_math
+
+fn main() -> int {
+    let base = triple(3)
+    base = clamp_int(square_int(base), 0, 100)
+    write_int(base)
+    0
+}
+```
+
+`core.math` and `io.console` are stdlib modules. `shared.bonus_math` is a local module at `shared/bonus_math.mtl` that presumably exports a `triple` function.
+
+<CodeGroup>
+```title="import_local.mtl"
+import shared.math_helpers
+
+fn main() -> int {
+    add_three(4)
+}
+```
+
+```title="import_stdlib.mtl"
+import core.math
+import core.result
+
+fn main() -> int {
+    let value = Ok(7)
+    let clamped = clamp_int(unwrap_or_int(value, 3), 0, 9)
+    square_int(clamped)
+}
+```
+
+```title="json_parser/main.mtl"
+import core.bool
+import shared.json
+import io.console
+
+fn print_result(label: string, source: string) {
+    let result = parse_document(source)
+    write_line_string(label)
+    write_line_int(bool_to_int(result_ok(result)))
+    write_line_int(kind_code(result_kind(result)))
+}
+
+fn main() -> int {
+    print_result("object", "{\"a\":1,\"b\":2}")
+    print_result("array", "[null,false,true]")
+    print_result("invalid", "[1,2")
+    0
+}
+```
+</CodeGroup>

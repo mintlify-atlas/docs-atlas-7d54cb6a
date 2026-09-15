@@ -1,0 +1,145 @@
+---
+title: "Mentalogue VS Code Extension: Features and Configuration"
+sidebarTitle: "VS Code Extension"
+description: "Add syntax highlighting, IntelliSense, and live diagnostics to VS Code for Mentalogue (.mtl/.mlib) files using the Inscribe compiler."
+---
+
+The Mentalogue VS Code extension brings first-class language support for `.mtl` and `.mlib` files directly into your editor. It pairs with the `inscribe` compiler binary to surface diagnostics as you write, indexes symbols across your entire workspace for completions and hover, and exposes commands for running checks and pulling packages via `suture`.
+
+## Requirements
+
+Before installing, make sure the following tools are available:
+
+- **`inscribe`** must be on your `PATH`, or you must point the extension at it via `mentalogue.inscribePath`. Without a reachable `inscribe` binary, diagnostics will not run and the extension will show a one-time warning.
+- **`suture`** (optional) — only needed if you use the `Mentalogue: Suture Pull In Workspace` command to fetch remote packages.
+
+## Features
+
+### Syntax Highlighting
+
+The extension registers two language IDs, each backed by the same TextMate grammar:
+
+| Language ID | File Extension | Description |
+| --- | --- | --- |
+| `mentalogue` | `.mtl` | Mentalogue source files |
+| `mentalogue-mlib` | `.mlib` | Compiled Mentalogue library files |
+
+Both file types receive full token-level highlighting, including keywords (`fn`, `struct`, `enum`, `const`, `let`, `if`, `else`, `while`, `for`, `in`, `return`, `import`, `pub`, `priv`, `comptime`), built-in types (`int`, `bool`, `byte`, `string`, `float`, `void`), and string literals.
+
+The language configuration also enables:
+- **Line comments** with `//` and **block comments** with `/* … */`
+- **Auto-closing and surrounding pairs** for `{}`, `[]`, `()`, and `""`
+- **Bracket matching** for all three bracket types
+
+### IntelliSense
+
+The extension maintains an in-memory symbol index built from every `.mtl` and `.mlib` file it can find in the open workspace. It provides three IntelliSense capabilities:
+
+**Completions** — Triggered on `.` and at any identifier position. In an `import` statement, completions offer module paths derived from workspace file layout. Everywhere else, completions include:
+- Language keywords
+- Built-in type names
+- All symbols visible in the current file (local declarations plus public symbols from any imported modules)
+
+**Hover** — Hovering over any identifier shows the symbol's full signature and the file it is defined in, rendered as a Markdown code block.
+
+**Go-to-definition** — Activating _Go to Definition_ on a symbol navigates to the exact line and column of its declaration, even if it lives in a different file or inside an `.mlib`.
+
+### Symbol Index Sources
+
+The index is rebuilt on activation, on configuration changes, and on demand. It walks the workspace and collects symbols from three sources:
+
+- All `.mtl` files reachable under the workspace root (excluding `.git`, `node_modules`, `target`, `dist`, `.inscribe`, `bin`, and `obj`)
+- `.suture/sources/**/*.mtl` files added by `suture pull`
+- `.mlib` binary files (enabled by default; controlled by `mentalogue.indexMlib`)
+
+For `.mlib` files, the extension parses the binary format directly — extracting function signatures, struct shapes, and enum definitions from null-delimited chunks — without requiring a separate toolchain step.
+
+### Background Diagnostics
+
+The extension runs `inscribe check <file>` in the background and maps its output to VS Code diagnostic markers. Checks are triggered in three ways:
+
+| Trigger | Behaviour |
+| --- | --- |
+| **Periodic check** | Fires on the active `.mtl` file at a fixed interval when `mentalogue.enablePeriodicCheck` is `true` |
+| **Check on save** | Fires immediately after saving any `.mtl` file when `mentalogue.checkOnSave` is `true` |
+| **Unsaved buffer snapshot** | When `mentalogue.checkUnsavedChanges` is `true`, the extension writes the current buffer to a temporary `.mtl` file and runs `inscribe check` against it, then deletes the temp file |
+
+Concurrent checks on the same file are deduplicated — if a check is already running for a file, the new request is dropped rather than queued. Each invocation respects the `mentalogue.checkTimeoutMs` limit (default: 12 000 ms).
+
+## Configuration
+
+All settings live under the `mentalogue` namespace. Open **File › Preferences › Settings** and search for `mentalogue`, or add them directly to your `settings.json`:
+
+```json
+{
+  "mentalogue.inscribePath": "inscribe",
+  "mentalogue.indexMlib": true,
+  "mentalogue.enablePeriodicCheck": true,
+  "mentalogue.checkIntervalMs": 1500,
+  "mentalogue.checkOnSave": true,
+  "mentalogue.checkUnsavedChanges": true,
+  "mentalogue.checkTimeoutMs": 12000,
+  "mentalogue.suturePath": "suture"
+}
+```
+
+| Setting | Type | Default | Description |
+| --- | --- | --- | --- |
+| `mentalogue.inscribePath` | `string` | `"inscribe"` | Path to the `inscribe` executable. Use an absolute path if `inscribe` is not on your `PATH`. |
+| `mentalogue.indexMlib` | `boolean` | `true` | Index `.mlib` files for symbol completion and hover when source is unavailable. |
+| `mentalogue.enablePeriodicCheck` | `boolean` | `true` | Periodically run `inscribe check` on the active `.mtl` file. |
+| `mentalogue.checkIntervalMs` | `number` | `1500` | Interval in milliseconds for periodic checks. Minimum value: `300`. |
+| `mentalogue.checkOnSave` | `boolean` | `true` | Run `inscribe check` whenever an `.mtl` file is saved. |
+| `mentalogue.checkUnsavedChanges` | `boolean` | `true` | Check unsaved edits by running `inscribe` against a temporary buffer snapshot. |
+| `mentalogue.checkTimeoutMs` | `number` | `12000` | Timeout in milliseconds for each `inscribe check` invocation. Minimum value: `1000`. |
+| `mentalogue.suturePath` | `string` | `"suture"` | Path to the `suture` executable used by the Suture Pull command. |
+
+<Tip>
+If `inscribe` is installed to a non-standard location, set `mentalogue.inscribePath` to the full absolute path — for example `"/home/user/.local/bin/inscribe"` on Linux or `"C:\\Tools\\inscribe\\inscribe.exe"` on Windows.
+</Tip>
+
+## Commands
+
+Open the Command Palette (`Ctrl+Shift+P` / `Cmd+Shift+P`) and type `Mentalogue` to see the available commands:
+
+<CardGroup cols={1}>
+  <Card title="Mentalogue: Refresh IntelliSense Index" icon="rotate">
+    Clears and rebuilds the entire symbol index by re-scanning all `.mtl` and `.mlib` files in the workspace. Run this after adding new files outside of VS Code or after a `suture pull` that the watcher missed.
+  </Card>
+  <Card title="Mentalogue: Run Inscribe Check" icon="circle-check">
+    Immediately runs `inscribe check` on whichever `.mtl` file is currently open in the active editor and updates the Problems panel. If no `.mtl` file is active, the command shows a prompt.
+  </Card>
+  <Card title="Mentalogue: Suture Pull In Workspace" icon="arrow-down-to-bracket">
+    Runs `suture pull` in the root of the open workspace folder to fetch or update declared package dependencies. Output is written to the **Mentalogue** output channel. Requires `suture` to be installed and configured via `mentalogue.suturePath`.
+  </Card>
+</CardGroup>
+
+## Testing the Extension Locally
+
+The extension can be launched directly from its source tree in an Extension Development Host — a sandboxed VS Code window with only this extension loaded.
+
+<Steps>
+  <Step title="Open the extension folder in VS Code">
+    Open the `tools/vscode-mentalogue` directory as a workspace in VS Code:
+
+    ```bash
+    code tools/vscode-mentalogue
+    ```
+  </Step>
+  <Step title="Install dependencies">
+    The extension has no npm dependencies beyond VS Code itself, but confirm the workspace opened cleanly by checking that `package.json` and `extension.js` are visible in the Explorer sidebar.
+  </Step>
+  <Step title="Launch the Extension Development Host">
+    Press `F5` (or select **Run › Start Debugging**). VS Code compiles the extension and opens a new **Extension Development Host** window with the Mentalogue extension active.
+  </Step>
+  <Step title="Open a Mentalogue project">
+    In the Extension Development Host window, open a folder that contains `.mtl` files. Syntax highlighting, IntelliSense, and background checks should all activate automatically on any `.mtl` file you open.
+  </Step>
+  <Step title="Inspect the output channel">
+    Open **View › Output** and select **Mentalogue** from the dropdown to see index rebuild logs, check results, and any diagnostic parsing output.
+  </Step>
+</Steps>
+
+<Warning>
+The Extension Development Host uses your locally installed `inscribe` binary (or the path set in `mentalogue.inscribePath`). Make sure an up-to-date build of Inscribe is on your `PATH` before running the host, otherwise the background diagnostics step will silently fail.
+</Warning>

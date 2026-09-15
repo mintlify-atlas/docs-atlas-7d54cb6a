@@ -1,0 +1,94 @@
+---
+title: "Inscribe Standard Library — Modules Overview"
+sidebarTitle: "Overview"
+description: "A guided tour of every module in the Inscribe stdlib: pure core helpers, console I/O, HTTP, and low-level runtime boundary declarations."
+---
+
+The Inscribe standard library ships as source that is compiled alongside your own code. Every module is imported with a single `import` statement — no package manager, no manifest entries, no version pins. The compiler resolves paths relative to the stdlib root and lowers them together with your program.
+
+## Two-Layer Architecture
+
+The stdlib is deliberately split into two layers that serve different purposes.
+
+**Pure Mentalogue layer** (`stdlib/core/` and `stdlib/io/`): everything that can be expressed in pure `.mtl` source lives here. These modules contain data transforms, arithmetic helpers, string inspection utilities, and console wrappers. They carry no operating-system dependencies of their own and can be reasoned about without knowing anything about the host platform.
+
+**Runtime boundary layer** (`stdlib/runtime/`): these files contain _only_ extern function declarations — no bodies, no logic. They are the seam between Mentalogue code and the services the compiler or host runtime must provide: file I/O, process control, wall-clock time, networking, and platform ABI hooks. You should rarely need to import `runtime.*` directly; prefer the `core.*` and `io.*` wrappers instead.
+
+<Note>
+  `runtime.*` modules expose raw compiler-provided declarations that touch the host system directly. Calling them bypasses any wrapper-level safety logic. Use the higher-level `core.*` and `io.*` wrappers unless you are writing new stdlib modules yourself.
+</Note>
+
+## Importing Modules
+
+Any module can be imported by its dotted path:
+
+```
+import core.math
+import core.string
+import io.console
+import http.client
+```
+
+The import statement makes every top-level function in that module available in the current file's scope. There is no selective import syntax — all public symbols are brought in.
+
+## Available Modules
+
+<CardGroup cols={2}>
+  <Card title="core.math" icon="calculator" href="/stdlib/core#coremath">
+    Integer arithmetic helpers: absolute value, min, max, clamp, sign, square, and absolute difference.
+  </Card>
+  <Card title="core.string" icon="text" href="/stdlib/core#corestring">
+    String inspection utilities: length, byte access, bounds checking, and character-class predicates.
+  </Card>
+  <Card title="core.bool" icon="toggle-on" href="/stdlib/core#corebool">
+    Boolean conversion helpers: `bool_to_int`, `int_to_bool`, and the ternary-style `select_int`.
+  </Card>
+  <Card title="core.result" icon="circle-check" href="/stdlib/core#coreresult">
+    `Result` type helpers for `Result<int, Error>`: unwrap with a fallback and success-testing.
+  </Card>
+  <Card title="io.console" icon="terminal" href="/stdlib/io">
+    Console I/O: typed print functions, newline, stdout flush, and integer stdin reading.
+  </Card>
+  <Card title="http.client" icon="globe" href="/stdlib/http">
+    HTTP GET requests that return the response body as a string. Requires `--allow-network`.
+  </Card>
+  <Card title="runtime.io" icon="bolt" href="/stdlib/io#runtime-boundary">
+    Low-level runtime declarations backing `io.console`: `print_int`, `print_string`, `read_int`, etc.
+  </Card>
+  <Card title="runtime.string" icon="bolt" href="/stdlib/core#corestring">
+    Low-level runtime declarations backing `core.string`: `string_length` and `string_byte_at`.
+  </Card>
+  <Card title="runtime.http" icon="bolt" href="/stdlib/http#runtime-boundary">
+    Low-level runtime declarations backing `http.client`: `http_get` and `http_serve_once`.
+  </Card>
+  <Card title="runtime.process" icon="bolt" href="/stdlib/overview#runtime-reference">
+    Process control: `exit(code: int)` — terminate the current process with the given exit code.
+  </Card>
+  <Card title="runtime.time" icon="bolt" href="/stdlib/overview#runtime-reference">
+    Wall-clock time: `unix_seconds() -> int` — current Unix epoch in whole seconds.
+  </Card>
+</CardGroup>
+
+## Runtime Reference
+
+The following declarations are the complete public surface of the two remaining runtime modules. They are documented here rather than on a dedicated page because each module contains only a single function.
+
+**`runtime.process`**
+
+```
+fn exit(code: int)
+```
+
+Terminates the running process immediately with the supplied exit code. No destructors or deferred actions are run. Use sparingly; most programs should return a code from `main` instead.
+
+**`runtime.time`**
+
+```
+fn unix_seconds() -> int
+```
+
+Returns the current wall-clock time as a Unix timestamp (whole seconds since 1970-01-01 00:00:00 UTC). Note that any function calling `unix_seconds` will be flagged as **non-deterministic** by the MIR determinism checker.
+
+<Tip>
+  If you only need elapsed time between two points in a single run, call `unix_seconds()` twice and subtract — no external dependency needed.
+</Tip>

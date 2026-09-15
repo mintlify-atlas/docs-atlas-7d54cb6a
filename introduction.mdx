@@ -1,0 +1,108 @@
+---
+title: "Inscribe: The Mentalogue Language Compiler Toolchain"
+sidebarTitle: "Introduction"
+description: "Inscribe is the official compiler toolchain for the Mentalogue Language, turning .mtl source files into native ELF64 and PE64 binaries."
+---
+
+Inscribe is the official compiler toolchain for the Mentalogue Language (`.mtl`). It takes source files through a multi-stage pipeline — from raw text all the way to native machine code — and ships as a single CLI binary with built-in support for checking, building, running, and emitting intermediate representations. Whether you are targeting Linux or Windows, running code in a sandboxed interpreter, or packaging a library for distribution, Inscribe is the single tool you need.
+
+## Compiler Pipeline
+
+Inscribe processes every `.mtl` source file through a series of well-defined stages. Each stage is implemented as its own crate in the workspace, and the incremental cache allows unchanged stages to be skipped on subsequent builds.
+
+| Stage | Crate | Description |
+|---|---|---|
+| **Lexer** | `inscribe-lexer` | Tokenises the raw `.mtl` source text |
+| **Parser** | `inscribe-parser` | Produces a concrete syntax tree from the token stream |
+| **AST** | `inscribe-ast` | Constructs and owns the abstract syntax tree |
+| **Resolve** | `inscribe-resolve` | Resolves names, imports, and symbols across the module graph |
+| **Type-check** | `inscribe-typeck` | Verifies type correctness and infers missing annotations |
+| **HIR** | `inscribe-hir` | Lowers the AST to a stable High-level Intermediate Representation |
+| **MIR** | `inscribe-mir` | Lowers HIR to a Mid-level Intermediate Representation used for codegen and the sandbox interpreter |
+| **Codegen** | `inscribe-codegen` | Emits native assembly and links a final executable |
+
+The `inscribe-incremental` crate manages a disk-backed artifact cache across all stages. Cache fingerprints are salted with the compiler's own identity so stale entries are automatically invalidated when you upgrade Inscribe.
+
+## CLI Commands
+
+All interaction with the compiler goes through four top-level commands.
+
+<CodeGroup>
+
+```bash check
+inscribe check <input.mtl>
+```
+
+```bash build
+inscribe build <input.mtl> [--sandbox] [--target <linux-x86_64|windows-x86_64>] [-o <output>]
+```
+
+```bash run
+inscribe run <input.mtl|input.smtl> [--sandbox] [--allow-stdin] [--allow-network]
+```
+
+```bash emit
+inscribe emit <asm|hir|mir|mlib|dwarf|debug> <input.mtl> [--target <linux-x86_64|windows-x86_64>] [-o <output>]
+inscribe emit abi [--target <linux-x86_64|windows-x86_64>] [--stability <stable|experimental|internal>] [-o <output.mabi>]
+```
+
+</CodeGroup>
+
+- **`check`** — runs the full pipeline up through type-checking and reports any errors without producing output artifacts.
+- **`build`** — compiles a `.mtl` program to a native binary for the chosen target, or to a sandbox-compatible `.smtl` artifact with `--sandbox`.
+- **`run`** — compiles and immediately executes a program via the MIR interpreter (sandbox) or a native subprocess.
+- **`emit`** — dumps an intermediate representation (`asm`, `hir`, `mir`, `mlib`, `dwarf`, `debug`, or `abi`) to stdout or a file.
+
+## Targets
+
+Inscribe produces native binaries for two platforms:
+
+- **Linux x86\_64** — ELF64 executables built against `x86_64-unknown-linux-gnu`
+- **Windows x86\_64** — PE64 executables built against `x86_64-pc-windows-msvc`
+
+Pass `--target linux-x86_64` or `--target windows-x86_64` to any command that accepts a target flag. When omitted, Inscribe defaults to the host platform.
+
+## Sandbox Execution
+
+The `--sandbox` flag on `inscribe run` routes execution through the built-in MIR interpreter instead of spawning a native process. The sandbox is capability-aware: network access and stdin are off by default and must be explicitly granted with `--allow-network` and `--allow-stdin`. This makes sandbox mode safe for running untrusted or experimental code without system-level side effects.
+
+<Note>
+  Sandbox mode uses the MIR interpreter directly, so some platform-specific behaviours available in native executables are not present. It is primarily intended for testing logic correctness and for CI pipelines that cannot run native binaries.
+</Note>
+
+## MLIB Library Format
+
+Inscribe can package compiled Mentalogue modules into `.mlib` files using `inscribe emit mlib`. Libraries built in this format carry metadata and symbol signatures, allowing other `.mtl` programs to import them by name. The `inscribe-resolve` stage knows how to locate `.mlib` files pulled from Suture packages under `.suture/mlib/<package>/<version>/`.
+
+## Incremental Compilation Cache
+
+The `inscribe-incremental` crate maintains a disk-backed artifact cache for the graph, resolve, type-check, HIR, and MIR stages. On a clean run all stages execute sequentially. On subsequent builds, any stage whose inputs are unchanged is restored directly from the cache, substantially reducing compile times for large projects. Cache fingerprints include the compiler's version identity, so upgrading Inscribe never produces stale-cache failures.
+
+## VS Code Extension
+
+A Mentalogue VS Code extension ships in the Inscribe repository under `tools/vscode-mentalogue`. It provides:
+
+- Syntax highlighting for `.mtl` and `.mlib` files
+- IntelliSense sourced from workspace `.mtl` and `.mlib` symbols, including symbols from `.suture` packages
+- Periodic `inscribe check` diagnostics on the active `.mtl` file
+
+<Tip>
+  To try the extension without installing it, open `tools/vscode-mentalogue` in VS Code and press **F5** to launch an Extension Development Host.
+</Tip>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Installation" icon="download" href="/installation">
+    Build Inscribe from source, install via mntpack, or grab a pre-built release binary.
+  </Card>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Write, check, run, and build your first Mentalogue program in under five minutes.
+  </Card>
+  <Card title="Language Guide" icon="book" href="/language/syntax">
+    Explore the Mentalogue Language syntax, types, imports, and standard library.
+  </Card>
+  <Card title="CLI Reference" icon="terminal" href="/cli/overview">
+    Full reference for every Inscribe command, flag, and emit target.
+  </Card>
+</CardGroup>

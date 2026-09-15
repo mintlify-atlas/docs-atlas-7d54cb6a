@@ -1,0 +1,54 @@
+---
+title: "Inscribe CLI: Commands, Usage, and Global Behavior"
+sidebarTitle: "Overview"
+description: "A guide to the inscribe binary — the compiler toolchain entry point for building, checking, running, and inspecting Mentalogue (.mtl) programs."
+---
+
+The `inscribe` binary is the single entry point for the entire Inscribe compiler toolchain. It exposes four commands that cover every stage of the Mentalogue development workflow: from fast type-checking during development, through building native or sandboxed executables, to dumping intermediate representations for debugging and tooling integration. Every command writes diagnostic output to stderr and exits with a non-zero code on failure, making it straightforward to use in CI pipelines and editor integrations.
+
+## Usage
+
+```text
+usage:
+  inscribe check <input.mtl>
+  inscribe emit <asm|hir|mir|mlib|dwarf|debug> <input.mtl> [--target <linux-x86_64|windows-x86_64>] [-o <output>]
+  inscribe emit abi [--target <linux-x86_64|windows-x86_64>] [--stability <stable|experimental|internal>] [-o <output.mabi>]
+  inscribe build <input.mtl> [--sandbox] [--target <linux-x86_64|windows-x86_64>] [-o <output>]
+  inscribe run <input.mtl|input.smtl> [--sandbox] [--allow-stdin] [--allow-network]
+```
+
+## Commands
+
+<CardGroup cols={2}>
+  <Card title="check" icon="circle-check" href="/cli/check">
+    Type-check a `.mtl` source file without producing any output. Runs the full pipeline through MIR and reports all errors. Ideal for CI and editor integrations.
+  </Card>
+  <Card title="build" icon="hammer" href="/cli/build">
+    Compile a `.mtl` source file to a native ELF64 or PE64 executable, or to a portable `.smtl` sandbox artifact with `--sandbox`.
+  </Card>
+  <Card title="run" icon="play" href="/cli/run">
+    Compile and immediately execute a `.mtl` source file, or run a pre-compiled `.smtl` sandbox artifact. Falls back to sandbox execution automatically when native codegen is unavailable.
+  </Card>
+  <Card title="emit" icon="code" href="/cli/emit">
+    Dump an intermediate representation or ABI header for a source file. Supports seven formats: `asm`, `hir`, `mir`, `mlib`, `dwarf`, `debug`, and `abi`.
+  </Card>
+</CardGroup>
+
+## Global Behavior
+
+<Note>
+  All error messages are written to **stderr**. On failure, `inscribe` exits with code `1`. On success, it exits with code `0` and prints a brief confirmation to stdout.
+</Note>
+
+Passing an unknown command, omitting all arguments, or passing `--help` or `-h` prints the full usage text shown above and exits with a non-zero code. There are no global flags that apply across all commands — each command documents its own flags.
+
+| Command | Reads source? | Produces output file? | Executes program? |
+|---------|:---:|:---:|:---:|
+| `check` | ✅ | ❌ | ❌ |
+| `build` | ✅ | ✅ | ❌ |
+| `run`   | ✅ | Temp only | ✅ |
+| `emit`  | ✅ (most formats) | ✅ | ❌ |
+
+<Tip>
+  The compiler uses an incremental cache stored in `.inscribe/cache/` next to your entry file. Subsequent invocations on unchanged sources skip redundant compilation stages automatically.
+</Tip>

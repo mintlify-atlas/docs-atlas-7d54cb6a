@@ -1,0 +1,255 @@
+---
+title: "Structs and Enums in the Mentalogue Language"
+sidebarTitle: "Structs & Enums"
+description: "How to define and use structs, attach methods, declare enums with optional discriminants, cast variants to int, and work with Result constructors."
+---
+
+Mentalogue provides two aggregate types: **structs** for grouping named fields and **enums** for representing a fixed set of named variants. Both are first-class types and both integrate with the pattern-matching system. The built-in `Result<T, Error>` type is modelled on enum-style construction and is described at the end of this page.
+
+## Struct Declaration
+
+A struct is declared with the `struct` keyword followed by the type name and a block of field declarations. Each field occupies its own line, with the name and type separated by `:`.
+
+```
+struct User {
+    name: string
+    age: int
+}
+```
+
+Fields are listed one per line inside the braces — newlines are significant here just as they are in statement position.
+
+## Struct Literals
+
+Create a value of a struct type by writing the type name followed by a block of `field: value` pairs, comma-separated:
+
+```
+let user = User { name: "Ada", age: 6 }
+```
+
+Every field declared in the struct must be given a value in the literal. Omitting a field is a compile error.
+
+## Field Access
+
+Read a field with the dot operator:
+
+```
+let n = user.age
+let s = user.name
+```
+
+<Warning>
+Accessing a field that does not exist on the struct type is detected at compile time. The following program is rejected:
+
+```
+struct User {
+    age: int
+}
+
+fn main() -> int {
+    let user = User { age: 3 }
+    user.name       // ERROR: unknown field 'name' on User
+}
+```
+</Warning>
+
+## Methods on Structs
+
+Attach functions to a struct type by prefixing the function name with the type name and a dot. The first parameter is conventionally named `self` and receives the struct value.
+
+```
+fn User.age_next(self) -> int {
+    self.age + 1
+}
+```
+
+Call methods with dot syntax:
+
+```
+fn main() -> int {
+    let user = User { name: "Ada", age: 6 }
+    user.age_next()
+}
+```
+
+This is the complete `struct_method.mtl` compile-pass test — it demonstrates declaration, instantiation, field access via `self`, and method calls in a single file.
+
+<Note>
+Methods are ordinary functions. `user.age_next()` desugars to a call where `user` is passed as the first argument. There is no implicit mutation — Mentalogue does not yet have mutable references.
+</Note>
+
+## Enum Declaration
+
+An enum is declared with the `enum` keyword followed by the type name and a block of variant names, one per line:
+
+```
+enum Kind {
+    Invalid
+    Object
+    Array
+    String
+    Number
+    Bool
+    Null
+}
+```
+
+Variants may carry an explicit integer **discriminant** after `=`:
+
+```
+enum Kind {
+    Invalid = 0
+    Object  = 1
+    Array   = 2
+    String  = 3
+    Number  = 4
+    Bool    = 5
+    Null    = 6
+}
+```
+
+When no discriminant is specified, variants are assigned ascending integer values starting from zero.
+
+## Enum Variant Access
+
+Access a variant through the enum type name using a dot:
+
+```
+let k = Kind.Object
+let fallback = Kind.Invalid
+```
+
+## Casting Enum to Int
+
+Use the `as` keyword to convert an enum variant to its underlying integer discriminant:
+
+```
+fn kind_code(kind: Kind) -> int {
+    kind as int
+}
+```
+
+This is the standard pattern for serialising enum variants to numeric codes, as shown throughout `json.mtl`:
+
+```
+fn kind_code(kind: Kind) -> int {
+    kind as int
+}
+
+priv fn kind_from_code(code: int) -> Kind {
+    let kind_from_code_table: [Kind; 7] = [
+        Kind.Invalid, Kind.Object, Kind.Array, Kind.String, Kind.Number, Kind.Bool, Kind.Null
+    ]
+
+    if code >= 0 && code < 7 {
+        kind_from_code_table[code]
+    } else {
+        Kind.Invalid
+    }
+}
+```
+
+## Matching on Enum Variants
+
+Use a `match` expression to dispatch on the variant of an enum value. Each arm uses a **path pattern** to name the expected variant:
+
+```
+fn describe_kind(k: Kind) -> int {
+    match k {
+        Kind.Invalid => 0
+        Kind.Object  => 1
+        Kind.Array   => 2
+        _            => 99
+    }
+}
+```
+
+The wildcard `_` matches any variant not covered by the arms above it.
+
+## The `Result` Type and Its Constructors
+
+`Result<T, E>` is a built-in generic type. It is constructed with two special constructors:
+
+- `Ok(value)` — wraps a successful value of type `T`
+- `Err(error)` — wraps an error value of type `E`
+
+```
+fn wrap(value: int) -> Result<int, Error> {
+    Ok(value)
+}
+
+fn rethrow(error: Error) -> Result<int, Error> {
+    Err(error)
+}
+```
+
+`Result` values are consumed with `match` using **constructor patterns**:
+
+```
+fn score(value: Result<int, Error>) -> int {
+    match value {
+        Ok(inner) => inner
+        Err(_) => 0
+    }
+}
+```
+
+The `Ok(inner)` pattern binds the wrapped value to `inner`. `Err(_)` uses a wildcard to discard the error.
+
+<Accordion title="Standard library: core.result">
+The `core.result` module provides pre-built helpers for the most common `Result<int, Error>` operations:
+
+```
+fn unwrap_or_int(value: Result<int, Error>, fallback: int) -> int {
+    match value {
+        Ok(inner) => inner
+        Err(_) => fallback
+    }
+}
+
+fn is_ok_int(value: Result<int, Error>) -> bool {
+    match value {
+        Ok(_) => true
+        Err(_) => false
+    }
+}
+```
+
+Import it with `import core.result`.
+</Accordion>
+
+## Complete Example: Struct with Method
+
+```
+struct User {
+    name: string
+    age: int
+}
+
+fn User.age_next(self) -> int {
+    self.age + 1
+}
+
+fn main() -> int {
+    let user = User { name: "Ada", age: 6 }
+    user.age_next()
+}
+```
+
+## Complete Example: Enum with Discriminants and Cast
+
+```
+enum Kind {
+    Invalid = 0
+    Object  = 1
+    Array   = 2
+}
+
+fn kind_code(kind: Kind) -> int {
+    kind as int
+}
+
+fn main() -> int {
+    kind_code(Kind.Object)
+}
+```

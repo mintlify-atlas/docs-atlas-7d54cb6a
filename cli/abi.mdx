@@ -1,0 +1,183 @@
+---
+title: "ABI Headers, MLIB Libraries, and FFI in Inscribe"
+sidebarTitle: "ABI & MLIB"
+description: "Emit ABI headers and binary MLIB library artifacts, and declare foreign functions through Inscribe's FFI layer with stability and ownership guarantees."
+---
+
+Inscribe ships a complete ABI layer that governs how compiled Mentalogue modules interact with each other and with foreign code. Three components work together: **ABI headers** carry versioning, calling-convention, and stability metadata used when linking modules; **MLIB files** are binary library artifacts that bundle compiled symbol exports with optional embedded source; and the **FFI layer** lets you declare and validate foreign function blocks with ownership and sandbox policies. This page covers all three and shows the `inscribe emit` commands that produce each artifact.
+
+## ABI Headers
+
+An ABI header is a 24-byte binary record identified by the magic bytes `INSCRIBE` (`ABI_MAGIC`). It records the ABI version (`CURRENT_ABI_VERSION`), the target platform, the calling convention, a stability level, and a flags word. Inscribe checks compatibility between two headers before linking: if the magic, version, target, or calling convention do not match, the linker reports an `AbiCompatibilityError`.
+
+### Targets and Calling Conventions
+
+| Target | Calling Convention |
+|---|---|
+| `linux-x86_64` | `SystemV64` |
+| `windows-x86_64` | `Win64` (32-byte shadow space) |
+
+Both targets use a 64-bit pointer width. The `Win64` convention reserves 32 bytes of shadow space before every call; `SystemV64` requires no shadow space.
+
+### Stability Levels
+
+<ParamField path="stable" type="Stability">
+  Safe for external linking and production use. Required when `require_stable` is true in a link-compatibility check. This is the level you should use for any library intended for consumption by other modules.
+</ParamField>
+
+<ParamField path="experimental" type="Stability">
+  Rejected for stable external linking. Inscribe will surface an `AbiCompatibilityError` with the message `"ABI stability \`experimental\` is not allowed for external linking"` if you attempt to link an experimental header against a stable consumer.
+</ParamField>
+
+<ParamField path="deprecated" type="Stability">
+  Still allows external linking (treated as stable for compatibility purposes), but carries a `since` version and an optional note. Use this when phasing out a stable interface.
+</ParamField>
+
+<ParamField path="internal" type="Stability">
+  Compiler-internal. Never public; rejected for any external use.
+</ParamField>
+
+### Emitting an ABI Header
+
+Use `inscribe emit abi` to write an ABI header for a target. The `--stability` flag defaults to `stable`.
+
+<CodeGroup>
+
+```bash Default (host target, stable)
+inscribe emit abi
+```
+
+```bash Windows target
+inscribe emit abi --target windows-x86_64
+```
+
+```bash Experimental stability
+inscribe emit abi --stability experimental -o unstable.mabi
+```
+
+```bash Stable Linux header to named file
+inscribe emit abi --target linux-x86_64 --stability stable -o inscribe.mabi
+```
+
+</CodeGroup>
+
+<Note>
+  ABI headers are tiny (24 bytes) and intended to travel alongside compiled artifacts. Store them next to the `.mlib` they describe so the linker can locate them without extra flags.
+</Note>
+
+### ABI Compatibility Errors
+
+When two modules are linked and their headers are incompatible, Inscribe raises an `AbiCompatibilityError`. Common causes:
+
+- The magic bytes do not spell `INSCRIBE` — the file is not an Inscribe ABI header.
+- The ABI version stored in the header is not compatible with `CURRENT_ABI_VERSION`.
+- The target encoded in the header (`linux-x86_64` vs `windows-x86_64`) does not match the requested link target.
+- The calling convention is neither the target's native convention nor the portable `C` convention.
+- The stability level is `experimental` or `internal` when a stable link is required.
+
+---
+
+## MLIB Binary Libraries
+
+An MLIB file is a binary library artifact identified by the four ASCII magic bytes `MLIB`. It bundles a symbol export table, a string table, compiled code, and data into a single file. An optional embedded-source section lets tooling recover the original `.mtl` source without a separate file.
+
+### File Layout
+
+The file begins with an 80-byte `MlibHeader` (`MLIB_HEADER_SIZE`), followed by the export table, the string table, the code section, and the data section, in that order. All offsets inside the header are absolute byte positions within the file.
+
+| Header Field | Description |
+|---|---|
+| `magic` | Always `MLIB` (4 bytes) |
+| `version` | MLIB format version (`u16`) |
+| `abi_version` | Matches `CURRENT_ABI_VERSION` |
+| `target` | `LinuxX86_64` or `WindowsX86_64` |
+| `flags` | Bitfield; see below |
+| `export_table_offset` / `export_table_count` | Location and count of export entries |
+| `string_table_offset` / `string_table_size` | Location and size of the string table |
+| `code_offset` / `code_size` | Location and size of the code section |
+| `data_offset` / `data_size` | Location and size of the data section |
+
+### Export Entries
+
+Each entry in the export table is exactly `MLIB_EXPORT_ENTRY_SIZE` (24) bytes. An entry records:
+
+- **name** — index and length into the string table
+- **kind** — `Function`, `Global`, or `Type`
+- **address** — byte offset into the code or data section
+
+### `MLIB_FLAG_EMBEDDED_SOURCE`
+
+When bit 0 of `flags` is set (`MLIB_FLAG_EMBEDDED_SOURCE = 1 << 0`), the data section contains the UTF-8 source text of the original `.mtl` file. Tooling can read it back via `embedded_source()`. This flag is off by default; pass `--embed-source` to `inscribe emit mlib` to enable it.
+
+### Emitting and Importing MLIB Files
+
+```bash
+# Compile a library to MLIB
+inscribe emit mlib mylib.mtl -o mylib.mlib
+
+# Compile with embedded source for tooling
+inscribe emit mlib mylib.mtl --embed-source -o mylib.mlib
+```
+
+To import a MLIB, place it in a location the resolver searches and use `import` normally in your `.mtl` source:
+
+```
+import mylib
+```
+
+The resolver looks in the local path first, then in the Suture package layout at `.suture/mlib/<package>/<version>/`. For example, a library named `collections` at version `1.0.0` should live at `.suture/mlib/collections/1.0.0/collections.mlib`.
+
+<Tip>
+  The MLIB format is self-describing: every file carries its own ABI version and target, so the linker can validate compatibility without a separate `.mabi` file.
+</Tip>
+
+---
+
+## FFI (Foreign Function Interface)
+
+The FFI layer lets Mentalogue code call functions defined in external native libraries. You declare an `ExternBlock` that lists `ExternFunction` entries; Inscribe validates calling conventions, stability, and type compatibility before allowing the block to be linked.
+
+### ExternBlock
+
+An `ExternBlock` groups a set of foreign function declarations under a name, a target platform, and an `AbiHeader`. The helper `ExternBlock::stable_c` creates a block that uses the portable `C` calling convention with `Stable` stability — the most common choice for interoperating with system libraries.
+
+### ExternFunction and ExternParam
+
+Each `ExternFunction` carries:
+
+- **`name`** — the symbol name as it appears in the external library
+- **`params`** — a list of `ExternParam` values, each with a name and an `AbiType`
+- **`return_type`** — the function's return type as an `AbiType`
+- **`calling_convention`** — must be `C` or the target's native convention (`SystemV64` / `Win64`)
+- **`stability`** — must be `stable` or `deprecated` for the block to pass link validation
+
+<Warning>
+  Functions with `experimental` or `internal` stability are rejected by `ExternBlock::validate()` with the error: function is not stable enough for FFI export. All externally linked functions must be at least `stable`.
+</Warning>
+
+### FfiTypeMap
+
+`FfiTypeMap` maps type names to ABI types and validates that every parameter and return type used in an `ExternBlock` is representable at the ABI boundary. The default map pre-registers the Mentalogue core types:
+
+| Name | ABI Type |
+|---|---|
+| `int` | `Int` |
+| `float` | `Float` |
+| `bool` | `Bool` |
+| `Error` | `Error` |
+| `ptr` | `Pointer` |
+| `unit` | `Unit` |
+
+Register additional custom struct types by calling `type_map.insert("MyType", AbiType::Struct(...))` before calling `validate_against`.
+
+### OwnershipBridge
+
+`OwnershipBridge` enforces ownership rules across the FFI boundary. Its central invariant is that **pointer values cannot be copied across FFI**. If you declare an `OwnershipRule` with `OwnershipPolicy::Copy` for a parameter of type `Pointer`, validation fails with an error containing `"pointer values"`. Use `Move` or `Borrow` policies for pointer parameters instead.
+
+### SandboxedExternBlock
+
+`SandboxedExternBlock` wraps an `ExternBlock` with a `SandboxPolicy` and adds a determinism check. If the policy enables network access (`allow_network: true`), `validate()` returns an error containing `"deterministic"` because network access violates deterministic sandboxing. Only capability-free or stdout-only extern blocks may be used inside a deterministic sandbox.
+
+<Note>
+  `SandboxedExternBlock` validation is separate from `ExternBlock` validation. Both must pass: the outer sandbox check is layered on top of the existing ABI and stability checks.
+</Note>

@@ -1,0 +1,82 @@
+---
+title: "Compilation Targets for Inscribe Build Commands"
+sidebarTitle: "Targets"
+description: "Choose between linux-x86_64 and windows-x86_64 to control the executable format, entry symbol, and calling convention Inscribe emits."
+---
+
+Inscribe compiles Mentalogue (`.mtl`) source files to native executables and can target either Linux or Windows from any host machine. The target controls the output executable format, the entry symbol the linker resolves, and the calling convention used throughout the generated code. When no `--target` flag is supplied, the compiler detects the host platform at compile time from `#[cfg(target_os)]` and selects the corresponding target automatically.
+
+## Supported Targets
+
+Inscribe supports two targets, both on the `x86_64` architecture.
+
+| Target | Aliases | Format | Entry Symbol | Extension |
+|---|---|---|---|---|
+| `linux-x86_64` | `x86_64-linux` | ELF64 | `_start` | `.elf` |
+| `windows-x86_64` | `x86_64-windows`, `windows` | PE64 | `mainCRTStartup` | `.exe` |
+
+### `linux-x86_64`
+
+Produces an ELF64 binary following the **SystemV x86_64 ABI** calling convention. The linker resolves `_start` as the program entry point. Output files use the `.elf` extension by default.
+
+### `windows-x86_64`
+
+Produces a PE64 binary following the **Win64 calling convention**, which reserves 32 bytes of shadow space on the stack before every call. The linker resolves `mainCRTStartup` as the program entry point. Output files use the `.exe` extension by default.
+
+## Specifying a Target
+
+Pass `--target` to the `build`, `run`, or `emit` subcommands. Inscribe accepts both the canonical name and any listed alias interchangeably.
+
+```bash
+inscribe build main.mtl --target windows-x86_64 -o main.exe
+inscribe build main.mtl --target linux-x86_64 -o main
+inscribe emit asm main.mtl --target linux-x86_64
+```
+
+<Tip>
+  Aliases such as `x86_64-linux` and `windows` are fully supported and resolve to the same target as their canonical forms. You can use whichever spelling you prefer.
+</Tip>
+
+## Cross-Compilation
+
+Because the target is an explicit argument rather than something derived from system toolchain state, cross-compilation requires no special setup. Build for Windows from a Linux host — or vice versa — by passing `--target` with the desired platform:
+
+```bash
+# On a Linux machine, produce a Windows executable
+inscribe build main.mtl --target windows-x86_64 -o main.exe
+
+# On a Windows machine, produce a Linux ELF
+inscribe build main.mtl --target linux-x86_64 -o main
+```
+
+<Note>
+  Cross-compiled binaries are fully native executables for the target platform. Inscribe does not require a cross-linker or sysroot to be installed on the host.
+</Note>
+
+## Executable Format Reference
+
+<CodeGroup>
+
+```text Linux (ELF64)
+Format:           ELF64
+Calling convention: SystemV x86_64 ABI
+Entry symbol:     _start
+Default extension: .elf
+```
+
+```text Windows (PE64)
+Format:           PE64
+Calling convention: Win64 (32-byte shadow space)
+Entry symbol:     mainCRTStartup
+Default extension: .exe
+```
+
+</CodeGroup>
+
+## Platform-Independent Sandbox Mode
+
+Sandbox mode (`.smtl` files) runs programs through the MIR interpreter rather than producing a native executable. Because no machine code is emitted, sandbox artifacts are platform-independent and require no `--target` flag. See the [Sandbox](/cli/sandbox) page for details.
+
+<Warning>
+  If you pass an unrecognized target string, the compiler reports an error: `unknown target; expected linux-x86_64 or windows-x86_64`. Check your spelling — only the names and aliases listed above are accepted.
+</Warning>

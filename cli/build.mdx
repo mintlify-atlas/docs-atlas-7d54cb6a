@@ -1,0 +1,122 @@
+---
+title: "inscribe build: Compile to a Native or Sandbox Artifact"
+sidebarTitle: "build"
+description: "Compile a Mentalogue source file to a native ELF64 or PE64 executable, or to a portable .smtl sandbox artifact using the --sandbox flag."
+---
+
+The `build` command compiles a Mentalogue source file all the way to a binary artifact on disk. By default it produces a native executable for the host platform — an ELF64 binary on Linux or a PE64 binary on Windows — but passing `--sandbox` switches the output to a portable `.smtl` sandbox artifact that can be run on any supported platform with [`inscribe run`](/cli/run). Cross-compilation to a different target is available through the `--target` flag.
+
+## Synopsis
+
+```bash
+inscribe build <input.mtl> [--sandbox] [--target <linux-x86_64|windows-x86_64>] [-o <output>]
+```
+
+## Arguments and Flags
+
+<ParamField path="input.mtl" type="string" required>
+  Path to the entry `.mtl` source file. Exactly one positional argument is accepted.
+</ParamField>
+
+<ParamField query="--sandbox" type="boolean">
+  Produce a `.smtl` sandbox artifact instead of a native binary. The artifact encodes the compiled MIR and can be executed with `inscribe run` on any supported platform.
+</ParamField>
+
+<ParamField query="--target" type="string">
+  Cross-compile target platform. Accepted values are `linux-x86_64` and `windows-x86_64`. Defaults to the host platform when omitted.
+</ParamField>
+
+<ParamField query="-o / --output" type="string">
+  Output file path. When omitted, the output filename is derived from the input filename with the appropriate extension (see [Default Output Names](#default-output-names)).
+</ParamField>
+
+## Default Output Names
+
+When `-o` is not specified, `build` derives the output path from the input filename:
+
+| Mode | Default output |
+|------|---------------|
+| Native (Linux) | `<input>.elf` |
+| Native (Windows) | `<input>.exe` |
+| Sandbox (`--sandbox`) | `<input>.smtl` |
+
+For example, `inscribe build src/main.mtl` on Linux writes `src/main.elf`.
+
+## Output Messages
+
+**Native build success:**
+
+```text
+wrote executable: <path>
+```
+
+**Sandbox build success:**
+
+```text
+wrote sandbox artifact: <path>
+```
+
+Errors are written to stderr and the process exits with code `1`.
+
+## Codegen Fallback Hint
+
+If the native code generator encounters a construct it does not yet support, the error message includes a hint pointing you to the sandbox:
+
+```text
+native codegen does not yet support closures
+Hint: use `inscribe run --sandbox <input.mtl>` to execute immediately,
+      or `inscribe build --sandbox <input.mtl>` to write a portable `.smtl` artifact.
+```
+
+<Tip>
+  When you hit a native codegen limitation, `--sandbox` is the fastest path to getting your program running. The resulting `.smtl` file can be distributed and executed on any platform that has `inscribe` installed.
+</Tip>
+
+## Examples
+
+### Basic native build (host platform)
+
+```bash
+inscribe build main.mtl
+```
+
+### Specify an output path
+
+```bash
+inscribe build main.mtl -o myapp
+```
+
+### Cross-compile to Windows
+
+```bash
+inscribe build main.mtl --target windows-x86_64
+```
+
+### Produce a portable sandbox artifact
+
+```bash
+inscribe build main.mtl --sandbox
+```
+
+### Sandbox artifact with explicit output path
+
+```bash
+inscribe build main.mtl --sandbox -o dist/main.smtl
+```
+
+### Cross-compile and name the output
+
+```bash
+inscribe build main.mtl --target linux-x86_64 -o build/server
+```
+
+<Warning>
+  The native backend targets x86-64 only. Attempting to specify an unsupported target will produce an error. If your platform or construct requires the sandbox, use `--sandbox`.
+</Warning>
+
+## How It Works
+
+`build` runs the same compilation pipeline as [`check`](/cli/check) — load, resolve, type-check, HIR, MIR — and then hands the compiled MIR off to the appropriate backend:
+
+- **Native path**: passes the MIR to `emit_native_executable`, which produces a raw ELF64 or PE64 binary and writes it to the output path.
+- **Sandbox path**: serialises the MIR into the `SMTL1` binary format and writes the resulting `.smtl` file to the output path.

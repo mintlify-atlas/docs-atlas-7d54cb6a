@@ -1,0 +1,163 @@
+---
+title: "inscribe emit: Dump Compiler Artifacts and ABI Headers"
+sidebarTitle: "emit"
+description: "Export any of seven compiler artifacts from a Mentalogue source file: assembly, HIR, MIR, MLIB, DWARF, debug report, or an ABI header binary."
+---
+
+The `emit` command exposes the compiler's internal representations and binary artifacts as files on disk. It supports seven output formats covering every layer of the compilation pipeline — from the high-level IR used by tools and libraries, down to native assembly text and DWARF debug information. The special `abi` format generates a standalone ABI header binary without needing a source file at all, making it suitable for toolchain integration and ABI compatibility checks.
+
+## Synopsis
+
+```bash
+inscribe emit <asm|hir|mir|mlib|dwarf|debug> <input.mtl> [--target <linux-x86_64|windows-x86_64>] [-o <output>]
+```
+
+```bash
+inscribe emit abi [--target <linux-x86_64|windows-x86_64>] [--stability <stable|experimental|internal>] [-o <output.mabi>]
+```
+
+## Emit Formats
+
+| Format | Output extension | Description |
+|--------|:---:|---|
+| `asm` | `.asm` | Native assembly text for the target platform |
+| `hir` | `.hir` | High-level IR text dump |
+| `mir` | `.mir` | Mid-level IR debug dump |
+| `mlib` | `.mlib` | Binary library file with embedded source |
+| `dwarf` | `.dwarf` | DWARF debug info summary |
+| `debug` | `.debug` | Full program debug report |
+| `abi` | `.mabi` | ABI header binary — no input file required |
+
+<Note>
+  `emit abi` is the **only** format that does not accept an input file. Passing a positional filename argument when using `abi` is an error. All other formats require exactly one input file.
+</Note>
+
+## Common Flags
+
+<ParamField path="format" type="string" required>
+  The emit format. Must be one of `asm`, `hir`, `mir`, `mlib`, `dwarf`, `debug`, or `abi`.
+</ParamField>
+
+<ParamField path="input.mtl" type="string">
+  Path to the entry `.mtl` source file. Required for all formats except `abi`. Passing this for `abi` is an error.
+</ParamField>
+
+<ParamField query="-o / --output" type="string">
+  Output file path. When omitted, the output filename is derived from the input filename with the format's extension substituted (e.g. `main.mtl` → `main.hir`). For `abi`, the default is `inscribe.mabi`.
+</ParamField>
+
+<ParamField query="--target" type="string">
+  Target platform for formats that require one. Accepted values are `linux-x86_64` and `windows-x86_64`. Defaults to the host platform when omitted. Relevant for `asm`, `mlib`, and `abi`.
+</ParamField>
+
+## ABI-Only Flags
+
+<ParamField query="--stability" type="string">
+  ABI stability level to embed in the generated `.mabi` header. Accepted values are `stable`, `experimental`, and `internal`. Defaults to `stable` when omitted. Only valid with `emit abi`.
+</ParamField>
+
+## Default Output Filenames
+
+For all formats that accept an input file, the default output path substitutes the input file's extension with the format's extension:
+
+```text
+main.mtl  →  main.hir    (emit hir)
+main.mtl  →  main.mir    (emit mir)
+main.mtl  →  main.asm    (emit asm)
+main.mtl  →  main.mlib   (emit mlib)
+main.mtl  →  main.dwarf  (emit dwarf)
+main.mtl  →  main.debug  (emit debug)
+```
+
+For `emit abi`, the default output is `inscribe.mabi` in the current directory.
+
+## On Success
+
+After writing the output file, `emit` prints a confirmation to stdout:
+
+```text
+wrote <label>: <path>
+```
+
+Where `<label>` is the human-readable name for the format (e.g. `HIR`, `MIR`, `assembly`, `ABI header`).
+
+## Examples
+
+### Dump the high-level IR
+
+```bash
+inscribe emit hir main.mtl
+```
+
+### Emit native assembly for a specific target
+
+```bash
+inscribe emit asm main.mtl --target linux-x86_64
+```
+
+### Build a binary library with embedded source
+
+```bash
+inscribe emit mlib mylib.mtl -o mylib.mlib
+```
+
+### Generate an ABI header for Windows
+
+```bash
+inscribe emit abi --target windows-x86_64 --stability experimental
+```
+
+### Inspect the MIR for a source file
+
+```bash
+inscribe emit mir main.mtl
+```
+
+### Dump DWARF debug information
+
+```bash
+inscribe emit dwarf main.mtl
+```
+
+### Produce a full debug report
+
+```bash
+inscribe emit debug main.mtl
+```
+
+### Emit HIR to a custom output path
+
+```bash
+inscribe emit hir main.mtl -o artifacts/main.hir
+```
+
+## Format Details
+
+<CardGroup cols={2}>
+  <Card title="asm" icon="microchip">
+    Calls into `emit_native_assembly` after a full MIR compilation. The result is a human-readable text file in the target platform's assembly syntax. Useful for performance auditing and low-level debugging.
+  </Card>
+  <Card title="hir" icon="sitemap">
+    Lowers the source file to HIR and renders it as formatted text via `render_hir`. HIR is the canonical representation used by the type checker and library tooling.
+  </Card>
+  <Card title="mir" icon="diagram-project">
+    Produces a Rust `{:#?}` debug dump of the full `MirProgram` after optimisation passes. Most useful for compiler developers inspecting the optimised MIR.
+  </Card>
+  <Card title="mlib" icon="box-archive">
+    Calls `emit_mlib_with_source` to produce a binary `.mlib` library file with the original source text embedded. Suitable for distribution as a compiled Mentalogue dependency.
+  </Card>
+  <Card title="dwarf" icon="bug">
+    Runs `emit_program_dwarf_with_sources` and dumps a debug-formatted DWARF summary. Used to inspect what debug information the compiler would embed in a native binary.
+  </Card>
+  <Card title="debug" icon="magnifying-glass">
+    Runs `build_program_debug_info_with_sources` and dumps the full program debug report. Useful for tooling that needs source-location and symbol metadata.
+  </Card>
+</CardGroup>
+
+<Tip>
+  `emit abi` is target-aware but source-independent. You can generate ABI headers for both platforms in a single CI step without needing any `.mtl` source files present.
+</Tip>
+
+<Warning>
+  Passing an input file to `emit abi` is a hard error: `` `emit abi` does not accept an input file ``. Omit the positional argument entirely when generating ABI headers.
+</Warning>

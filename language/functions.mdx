@@ -1,0 +1,214 @@
+---
+title: "Declaring and Calling Functions in Mentalogue"
+sidebarTitle: "Functions"
+description: "How to declare, annotate, call, and compose functions in Mentalogue, including methods, visibility, early return, and the try operator."
+---
+
+Functions are the primary unit of computation in Mentalogue. They are declared with the `fn` keyword, carry explicit type annotations on every parameter, and may optionally declare a return type. Because blocks are expressions, the last expression in a function body is automatically its return value — making explicit `return` statements necessary only for early exits.
+
+## Basic Declaration
+
+A function is declared with `fn`, followed by its name, a parenthesised parameter list, an optional `->` return type, and a block body enclosed in `{ }`.
+
+```
+fn add(left: int, right: int) -> int {
+    left + right
+}
+```
+
+Every parameter must have an explicit type annotation separated from the name by `:`. The return type follows `->`. If the function returns nothing, omit the `->` clause entirely and the compiler infers the unit return type.
+
+```
+fn greet(name: string) {
+    write_line_string(name)
+}
+```
+
+## Expression-Oriented Bodies
+
+The last expression in a block is the implicit return value of that block. You do not need a `return` keyword for the normal exit path.
+
+```
+fn main() -> int {
+    let base = 4
+    let extra = 3
+    base + extra        // this value is returned
+}
+```
+
+If expressions, match expressions, and nested blocks all follow the same rule — their last expression is their value.
+
+## Explicit `return`
+
+Use `return` when you want to exit a function before reaching the last expression:
+
+```
+fn safe_divide(left: int, right: int) -> int {
+    if right == 0 {
+        return 0
+    }
+    left / right
+}
+```
+
+## Parameters and Calling
+
+Call a function by writing its name followed by a comma-separated argument list in parentheses.
+
+```
+let result = add(10, 3)
+let quotient = safe_divide(20, 4)
+```
+
+The number of arguments must match the number of declared parameters exactly. Passing fewer or more arguments is a compile error:
+
+```
+// ERROR: add expects two arguments
+let bad = add(1)
+```
+
+## Methods on Structs
+
+Functions can be attached to a type using a *receiver path*. Write `fn TypeName.method_name(self)` where `self` is the implicit first parameter that holds the struct value.
+
+```
+struct User {
+    name: string
+    age: int
+}
+
+fn User.age_next(self) -> int {
+    self.age + 1
+}
+```
+
+Call a method with dot syntax on a value of the receiver type:
+
+```
+fn main() -> int {
+    let user = User { name: "Ada", age: 6 }
+    user.age_next()
+}
+```
+
+<Note>
+Methods in Mentalogue are syntactic sugar: `user.age_next()` is equivalent to calling the function `User.age_next` with `user` as the first argument. There is no special receiver keyword beyond `self` used as a parameter name.
+</Note>
+
+## Visibility
+
+All functions are **public** by default — they can be called from any module that imports the file. Mark a function **private** with the `priv` keyword to restrict it to the current file:
+
+```
+priv fn kind_from_code(code: int) -> Kind {
+    // internal helper — not exported
+}
+
+fn kind_code(kind: Kind) -> int {
+    kind as int
+}
+```
+
+Private functions are invisible to importers. They cannot be called from other modules even when the module is imported.
+
+## The `?` Try Operator
+
+The postfix `?` operator is used on expressions that produce `Result<T, Error>`. If the value is `Ok(inner)`, it unwraps to `inner`. If the value is `Err(error)`, it immediately returns the error from the surrounding function. The surrounding function must itself return `Result`.
+
+```
+fn read_and_double(source: string) -> Result<int, Error> {
+    let n = parse_int(source)?
+    Ok(n * 2)
+}
+```
+
+<Tip>
+The `?` operator is the idiomatic way to propagate errors up the call stack without deeply nested `match` expressions. Use it whenever a function calls another function that may return `Err`.
+</Tip>
+
+## Full Example: Calculator
+
+The following example from `examples/calculator.mtl` shows several functions working together, including function calls as arguments and `if` expressions as values:
+
+```
+import io.console
+
+fn safe_divide(left: int, right: int) -> int {
+    if right == 0 {
+        0
+    } else {
+        left / right
+    }
+}
+
+fn calculate(left: int, right: int, op: int) -> int {
+    (if op == 0 {
+        left + right
+    } else {
+        0
+    }) + (if op == 1 {
+        left - right
+    } else {
+        0
+    }) + (if op == 2 {
+        left * right
+    } else {
+        0
+    }) + (if op == 3 {
+        safe_divide(left, right)
+    } else {
+        0
+    })
+}
+
+fn main() -> int {
+    write_line_string("left")
+    let left = read_line_int()
+
+    write_line_string("right")
+    let right = read_line_int()
+
+    write_line_string("op: 0 add, 1 subtract, 2 multiply, 3 divide")
+    let op = read_line_int()
+
+    write_line_string("result")
+    write_line_int(calculate(left, right, op))
+
+    0
+}
+```
+
+## Matching on `Result` from a Function
+
+Functions returning `Result<T, Error>` are naturally consumed with `match`. This pattern from `result_match.mtl` shows the standard two-arm destructuring:
+
+```
+fn score(value: Result<int, Error>) -> int {
+    match value {
+        Ok(inner) => inner
+        Err(_) => 0
+    }
+}
+```
+
+<Accordion title="Standard library result helpers">
+`core.result` provides ready-made functions for common `Result<int, Error>` operations so you don't have to hand-write `match` every time:
+
+```
+import core.result
+
+fn unwrap_or_int(value: Result<int, Error>, fallback: int) -> int {
+    match value {
+        Ok(inner) => inner
+        Err(_) => fallback
+    }
+}
+
+fn is_ok_int(value: Result<int, Error>) -> bool {
+    match value {
+        Ok(_) => true
+        Err(_) => false
+    }
+}
+```
+</Accordion>

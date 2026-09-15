@@ -1,47 +1,203 @@
 ---
-title: "Quickstart"
-description: "Begin with a guide on the fastest path to a successful outcome"
+title: "Quickstart: Write and Run Your First Mentalogue Program"
+sidebarTitle: "Quickstart"
+description: "Create, check, run, and build a Mentalogue program with Inscribe in minutes, then explore a complete calculator example with functions and stdin."
 ---
 
-Describe how someone begins using your product. What is the first thing they need to do? Are there any prerequisites?
+This guide walks you through the core Inscribe workflow: write a source file, check it for errors, run it immediately, and compile it to a native binary. By the end you will have a working development loop and a feel for how the Mentalogue Language looks in practice.
 
-A quickstart should take someone from zero to using your product. They'll get a quick win and a sense of what they can accomplish.
+If you have not installed Inscribe yet, see the [Installation](/installation) guide first.
 
-## Prerequisites
-
-Before you begin, you must have:
-
-- Requirement one (for example, Node.js 18+, a free account, an API key)
-- Requirement two (for example, a compatible device, a compatible browser, a compatible operating system)
-
-## Get started
+## Hello, Mentalogue
 
 <Steps>
-  <Step title="Install">
-    Describe how to install your product or sign up.
+  <Step title="Create hello.mtl">
+    Create a new file called `hello.mtl` with the following content:
 
-    ```bash
-    npm install your-package
+    ```mentalogue
+    import io.console
+
+    fn main() -> int {
+        write_line_string("Hello, Mentalogue!")
+        0
+    }
     ```
+
+    - `import io.console` brings the standard I/O functions into scope, including `write_line_string`.
+    - `fn main() -> int` is the program entry point. Returning `0` signals success to the operating system.
   </Step>
-  <Step title="Configure">
-    Describe any setup or configuration needed before first use.
+
+  <Step title="Check it for errors">
+    Run the type-checker without producing any output artifacts:
 
     ```bash
-    your-cli init
+    inscribe check hello.mtl
     ```
+
+    If the program is valid you will see:
+
+    ```
+    check passed: hello.mtl
+    ```
+
+    The `check` command runs the full pipeline through type-checking — lexer, parser, AST, resolve, and typeck — so it catches the same errors a build would, but without the overhead of codegen.
   </Step>
-  <Step title="Run it">
-    Show the first thing a user does to see it working.
+
+  <Step title="Run it immediately">
+    Compile and execute the program in a single step:
 
     ```bash
-    your-cli start
+    inscribe run hello.mtl
+    ```
+
+    Expected output:
+
+    ```
+    Hello, Mentalogue!
+    program exited with code 0
+    ```
+
+    `inscribe run` compiles the source, then immediately invokes the resulting program. No intermediate files are left on disk by default.
+  </Step>
+
+  <Step title="Build a native binary">
+    Produce a standalone executable that you can run directly:
+
+    ```bash
+    inscribe build hello.mtl -o hello
+    ```
+
+    Expected output:
+
+    ```
+    wrote executable: hello
+    ```
+
+    On Windows the output is `hello.exe`. You can now run it directly without Inscribe:
+
+    ```bash
+    ./hello
+    ```
+
+    To cross-compile for the other platform, pass an explicit target:
+
+    ```bash
+    # From Linux, target Windows:
+    inscribe build hello.mtl --target windows-x86_64 -o hello.exe
+
+    # From Windows, target Linux:
+    inscribe build hello.mtl --target linux-x86_64 -o hello
     ```
   </Step>
 </Steps>
 
-<Tip>
-  Give people a way to get help. This could be a link to a support page, a chat with a customer support agent, or a forum for your product.
+## Sandbox Mode
 
-  Example: Need help? Reach out to us at [support@yourcompany.com](mailto:support@yourcompany.com).
+The `--sandbox` flag routes execution through Inscribe's built-in MIR interpreter instead of running a native subprocess. This is useful for CI environments, security-sensitive contexts, or platforms where native execution is not available.
+
+```bash
+inscribe run hello.mtl --sandbox
+```
+
+By default the sandbox blocks stdin and network access. Grant them explicitly if your program needs them:
+
+```bash
+inscribe run hello.mtl --sandbox --allow-stdin --allow-network
+```
+
+<Note>
+  Sandbox mode executes the MIR directly, so it reflects the exact semantics of the compiled program without any OS-level side effects. It is not a restricted container — it is a pure interpreter.
+</Note>
+
+## A Complete Example: Calculator
+
+The `examples/calculator.mtl` file in the Inscribe repository demonstrates functions, conditional expressions, and interactive stdin. It reads two integers and an operator code, then prints the result.
+
+```mentalogue
+import io.console
+
+fn safe_divide(left: int, right: int) -> int {
+    if right == 0 {
+        0
+    } else {
+        left / right
+    }
+}
+
+fn calculate(left: int, right: int, op: int) -> int {
+    (if op == 0 {
+        left + right
+    } else {
+        0
+    }) + (if op == 1 {
+        left - right
+    } else {
+        0
+    }) + (if op == 2 {
+        left * right
+    } else {
+        0
+    }) + (if op == 3 {
+        safe_divide(left, right)
+    } else {
+        0
+    })
+}
+
+fn main() -> int {
+    write_line_string("left")
+    let left = read_line_int()
+
+    write_line_string("right")
+    let right = read_line_int()
+
+    write_line_string("op: 0 add, 1 subtract, 2 multiply, 3 divide")
+    let op = read_line_int()
+
+    write_line_string("result")
+    write_line_int(calculate(left, right, op))
+
+    0
+}
+```
+
+Run it with stdin enabled:
+
+```bash
+inscribe run examples/calculator.mtl --allow-stdin
+```
+
+Or in sandbox mode with stdin:
+
+```bash
+inscribe run examples/calculator.mtl --sandbox --allow-stdin
+```
+
+A few things to note about this example:
+
+- **If expressions are values.** Each `if/else` arm is an expression that produces an `int`, so they compose directly in arithmetic.
+- **`safe_divide` guards against division by zero.** Mentalogue does not have exceptions; defensive functions like this are the idiomatic approach.
+- **`read_line_int` and `write_line_int`** come from `io.console` just like `write_line_string`.
+
+<Tip>
+  You can emit the HIR or MIR for any example to see what the compiler produces at each stage:
+
+  ```bash
+  inscribe emit hir examples/calculator.mtl
+  inscribe emit mir examples/calculator.mtl
+  ```
 </Tip>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Language Guide" icon="book" href="/language/syntax">
+    Deep-dive into Mentalogue syntax, types, imports, enums, arrays, and more.
+  </Card>
+  <Card title="CLI Reference" icon="terminal" href="/cli/overview">
+    Complete reference for every Inscribe command, flag, emit target, and ABI option.
+  </Card>
+  <Card title="Standard Library" icon="box" href="/stdlib/overview">
+    Explore the modules available under `io`, `core`, `shared`, and other namespaces.
+  </Card>
+</CardGroup>

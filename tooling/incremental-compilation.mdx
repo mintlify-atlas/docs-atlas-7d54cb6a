@@ -1,0 +1,103 @@
+---
+title: "How Inscribe's Incremental Compilation Cache Works"
+sidebarTitle: "Incremental Compilation"
+description: "Inscribe caches each compiler pipeline stage to disk and skips unchanged stages on subsequent builds, keeping incremental rebuilds fast."
+---
+
+Inscribe avoids redundant work between builds by persisting the output of every pipeline stage to a disk-backed cache. When none of the source files that feed a stage have changed, Inscribe loads the cached result and skips the computation entirely. Only stages that are downstream of a changed file are recomputed, making incremental builds significantly faster than a full cold compile.
+
+## Cache Location
+
+The cache lives at `.inscribe/cache/` relative to the directory containing the entry `.mtl` file. Given an entry file at `src/main.mtl`, the cache root is `src/.inscribe/cache/`.
+
+Each pipeline stage gets its own subdirectory:
+
+```text
+src/
+  .inscribe/
+    cache/
+      graph/
+      resolve/
+      typeck/
+      hir/
+      mir/
+  main.mtl
+```
+
+Inside each stage directory, entries are stored as binary files named `<key-hash>.bin`, where the key hash is the FNV-1a fingerprint of the entry file path. Entries are serialised with `bincode` and carry an embedded fingerprint alongside the cached value.
+
+<Note>
+The `.inscribe/` directory is safe to delete at any time. Inscribe will recreate it and perform a full cold compile on the next run. Deleting it is the recommended way to force a clean build.
+</Note>
+
+## Pipeline Stages
+
+Inscribe's compilation pipeline runs five ordered stages. Each stage is independently cached:
+
+| Stage | Cache key | What is cached |
+| --- | --- | --- |
+| `graph` | Entry file path | The loaded module graph — all source files discovered by following `import` statements |
+| `resolve` | Entry file path | Name-resolution results mapping every identifier to its declaration |
+| `typeck` | Entry file path | Type-check results for the merged module graph |
+| `hir` | Entry file path | The high-level intermediate representation (HIR) produced by lowering the resolved AST |
+| `mir` | Entry file path | The mid-level intermediate representation (MIR), including all MIR optimisation passes |
+
+When the `QueryEngine` runs a stage, it first checks the in-memory `Cache` for a fresh entry. If the in-memory cache misses, it falls back to the `DiskCache` and deserialises the stored entry. Only if both caches miss does it invoke the compute function and write the result back to both layers.
+
+## Fingerprinting
+
+Every cache entry is associated with a **fingerprint** — a 64-bit FNV-1a hash computed by `FingerprintBuilder`. A cache entry is considered fresh only when its stored fingerprint exactly matches the current input fingerprint. If the fingerprints differ, the entry is treated as stale and recomputed.
+
+Source fingerprints are computed over the full content and path of every source file in the module graph:
+
+1. The paths of all modules are sorted deterministically.
+2. For each path, the file's raw bytes and its path string are fed into `FingerprintBuilder`.
+3. The resulting fingerprint is combined with the **compiler identity fingerprint** (see below).
+
+This means that changing even a single byte in any imported `.mtl` file will produce a different fingerprint and invalidate all downstream cache entries.
+
+### Compiler Identity Salting
+
+Each source fingerprint is combined with a salt derived from the compiler binary itself. The salt incorporates:
+
+- The cache schema version string (`inscribe-cache-v2`)
+- The compiler's `CARGO_PKG_VERSION`
+- The absolute path of the compiler executable
+- The file size of the compiler executable
+- The last-modified timestamp of the compiler executable (seconds and nanoseconds since the Unix epoch)
+
+This means that replacing the `inscribe` binary — even without touching any source files — invalidates the entire cache. Stale entries from an older compiler version can never surface as false hits.
+
+<Note>
+Compiler identity salting was introduced in **Inscribe 0.2.2** to fix a class of stale-cache typechecking failures. Before 0.2.2, updating the compiler without changing source files could leave the cache in a state where the typechecking results from the old compiler were served to the new one, causing incorrect errors — most visibly when accessing fields on imported `.mlib` structs such as `ParseResult` after syncing a newer build.
+</Note>
+
+## Cache Schema Version
+
+The cache schema is versioned with the constant string `inscribe-cache-v2`. This version is baked into the compiler identity fingerprint, so a compiler build that changes the schema string automatically invalidates every existing cache entry without any migration step.
+
+## Invalidation Model
+
+Invalidation is based entirely on fingerprint comparison — there is no explicit dependency tracking between cache entries at the disk level. Because all five stages share the same source fingerprint (the combined hash of all module sources and the compiler identity), any change to any source file invalidates all five stages together.
+
+The in-memory `DepGraph` tracks fine-grained dependencies between `QueryEngine` nodes within a single session — for example, to detect cycles — but cross-session invalidation is handled by fingerprint staleness alone.
+
+## Release Note: 0.2.2 Cache Fix
+
+The following excerpt from the Inscribe release notes describes the fix that introduced compiler identity salting:
+
+> **0.2.2 — 2026-03-19**
+>
+> Fixed incremental cache invalidation across compiler updates by salting cache fingerprints with compiler identity. Resolved stale-cache typechecking failures on imported `.mlib` structs (for example `ParseResult` field access after syncing a newer Inscribe build).
+
+If you encountered mysterious type errors after upgrading Inscribe, upgrading to 0.2.2 or later and deleting the `.inscribe/` directory will resolve them.
+
+## Clearing the Cache
+
+To perform a cold compile, delete the `.inscribe/` directory next to your entry `.mtl` file:
+
+```bash
+rm -rf .inscribe/
+```
+
+Inscribe will recreate the directory and all stage subdirectories on the next build.
