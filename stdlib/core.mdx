@@ -72,6 +72,18 @@ fn sign_int(value: int) -> int
 
 Returns `1` if `value` is positive, `-1` if negative, and `0` if zero.
 
+#### `pow_int`
+
+```
+fn pow_int(value: int, exponent: int) -> int
+```
+
+Returns `value` raised to the power of `exponent`. Both arguments must be integers.
+
+<Warning>
+  The current implementation uses a fixed iteration count and is intended for small, non-negative exponents. Behaviour for negative or very large exponents is unspecified.
+</Warning>
+
 #### `abs_diff_int`
 
 ```

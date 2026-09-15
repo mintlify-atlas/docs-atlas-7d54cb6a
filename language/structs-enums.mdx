@@ -1,5 +1,5 @@
 ---
-title: "Structs and Enums in the Mentalogue Language"
+title: "Structs and Enums in Mentalogue: Definitions and Methods"
 sidebarTitle: "Structs & Enums"
 description: "How to define and use structs, attach methods, declare enums with optional discriminants, cast variants to int, and work with Result constructors."
 ---
@@ -48,7 +48,7 @@ struct User {
 
 fn main() -> int {
     let user = User { age: 3 }
-    user.name       // ERROR: unknown field 'name' on User
+    user.name
 }
 ```
 </Warning>

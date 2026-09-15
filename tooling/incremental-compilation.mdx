@@ -51,7 +51,7 @@ Every cache entry is associated with a **fingerprint** — a 64-bit FNV-1a hash 
 Source fingerprints are computed over the full content and path of every source file in the module graph:
 
 1. The paths of all modules are sorted deterministically.
-2. For each path, the file's raw bytes and its path string are fed into `FingerprintBuilder`.
+2. For each path, the path string and then the file's raw bytes are fed into `FingerprintBuilder`.
 3. The resulting fingerprint is combined with the **compiler identity fingerprint** (see below).
 
 This means that changing even a single byte in any imported `.mtl` file will produce a different fingerprint and invalidate all downstream cache entries.

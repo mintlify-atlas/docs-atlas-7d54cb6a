@@ -4,7 +4,7 @@ sidebarTitle: "Sandbox"
 description: "Run Mentalogue programs through the MIR interpreter with a configurable capability policy instead of compiling to a native executable."
 ---
 
-Sandbox mode executes a Mentalogue program by running it through Inscribe's MIR interpreter rather than compiling it to a native binary. This makes execution platform-independent and allows fine-grained control over what system resources the program can access. A `SandboxPolicy` governs each run, specifying which capabilities — stdout, stdin, and network — are permitted. By default the sandbox enforces deterministic execution, meaning only pure computation and output are allowed unless you explicitly opt in to non-deterministic capabilities.
+Sandbox mode executes a Mentalogue program by running it through Inscribe's MIR interpreter rather than compiling it to a native binary. This makes execution platform-independent and allows fine-grained control over what system resources the program can access. A `SandboxPolicy` governs each run, specifying which capabilities — stdout, stdin, and network — are permitted.
 
 ## Two Ways to Use Sandbox Mode
 
@@ -50,20 +50,20 @@ Every sandbox run is governed by a `SandboxPolicy`. Three capabilities are defin
 
 | Flag | Capability | Breaks Determinism |
 |---|---|---|
-| *(none — always enabled)* | `Stdout` | No |
+| `--allow-stdout` | `Stdout` | No |
 | `--allow-stdin` | `Stdin` | Yes |
 | `--allow-network` | `Network` | Yes |
 
-**`allow_stdout`** is always `true`. Programs can write to standard output in every sandbox run without any flag.
+**`allow_stdout`** enables writing to standard output. Without this flag, stdout writes are not permitted by the policy.
 
-**`allow_stdin`** is granted by `--allow-stdin`. Enabling it also marks the run as non-deterministic, so the `deterministic_only` guard no longer blocks stdin reads.
+**`allow_stdin`** is granted by `--allow-stdin`. Enabling it also marks the run as non-deterministic, so the `deterministic_only` guard blocks stdin reads unless this flag is set.
 
 **`allow_network`** is granted by `--allow-network`. Like stdin, enabling it marks the run as non-deterministic.
 
-**`deterministic_only`** defaults to `true`. When it is `true`, the policy's `allows()` check returns `false` for `Stdin` and `Network` even if those individual flags are set, acting as a second layer of defense. Passing either `--allow-stdin` or `--allow-network` sets `deterministic_only` to `false`.
+**`deterministic_only`** defaults to `false`. When it is `true`, the policy's `allows()` check returns `false` for `Stdin` and `Network` even if those individual flags are set, acting as a second layer of defense.
 
 <Note>
-  The `Stdout` capability is never gated by `deterministic_only`. Writing to stdout is considered a pure side effect that does not compromise reproducibility.
+  The `Stdout` capability is never gated by `deterministic_only`. Writing to stdout does not compromise reproducibility and is unaffected by the determinism guard.
 </Note>
 
 ## Determinism Checking
@@ -77,7 +77,7 @@ The classification rules are:
 | `print_int`, `print_bool`, `print_string`, `print_newline`, `flush_stdout` | `Filesystem` | **No** |
 | `string_length`, `string_byte_at` | *(none)* | No |
 | `read_int` | `Stdin` | **Yes** |
-| `http_get`, `http_serve_once` | `Network` | **Yes** |
+| `http_get` | `Network` | **Yes** |
 | Any unknown foreign function | `ForeignHost` | **Yes** |
 
 <Warning>

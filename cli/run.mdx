@@ -1,6 +1,6 @@
 ---
 title: "inscribe run: Compile and Execute a Mentalogue Program"
-sidebarTitle: "run"
+sidebarTitle: "Run"
 description: "Compile a .mtl source file and execute it immediately, or run a pre-compiled .smtl sandbox artifact, with optional sandbox capability flags."
 ---
 
@@ -73,11 +73,15 @@ native backend unavailable: native codegen does not yet support closures. Fallin
 
 ## Output
 
-`run` prints the program's own stdout output as it executes. After the program completes, it prints:
+`run` prints the program's own stdout output as it executes.
+
+**Native execution** prints a final status line after the child process exits:
 
 ```text
 program exited with code <N>
 ```
+
+**Sandbox execution** (including `.smtl` artifacts and the `--sandbox` flag) prints the program's return value if it is non-unit, but does not print an exit code line.
 
 If execution fails, the error is written to stderr and `inscribe` exits with code `1`.
 

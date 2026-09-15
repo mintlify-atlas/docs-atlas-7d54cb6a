@@ -13,6 +13,7 @@ The following primitive types are built into the language:
 | Type     | Description                              |
 |----------|------------------------------------------|
 | `int`    | A signed integer                         |
+| `byte`   | An unsigned byte value                   |
 | `float`  | A floating-point number                  |
 | `bool`   | Boolean — `true` or `false`              |
 | `string` | An immutable sequence of characters      |
@@ -23,6 +24,8 @@ let ratio: float = 0.5
 let active: bool = true
 let label: string = "hello"
 ```
+
+`byte` is used for low-level operations such as reading individual bytes from a string. The `core.string` module exposes `byte_at`, which returns the `byte` value at a given index position.
 
 ## Unit Type
 
@@ -103,10 +106,10 @@ fn main() -> int {
 When you declare a variable with `let` or `const` and provide an initializer, the compiler infers the type from the right-hand side. You do not need to write the annotation.
 
 ```
-let base = 4        // inferred as int
-let ratio = 0.75    // inferred as float
-let name = "Ada"    // inferred as string
-let ok = true       // inferred as bool
+let base = 4
+let ratio = 0.75
+let name = "Ada"
+let ok = true
 ```
 
 The inferred type of a `let` binding is fixed for the lifetime of the binding. Assigning a value of a different type later in the same scope is a compile error.

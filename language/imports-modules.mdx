@@ -78,6 +78,10 @@ fn main() -> int {
 
 The Mentalogue standard library is organised under top-level namespaces. Import a stdlib module the same way you import a local module — the compiler recognises stdlib roots automatically.
 
+<Note>
+The compiler locates the standard library by searching next to the Inscribe binary, then under `~/.mentalogue/inscribe/stdlib/`. You can override this with the `INSCRIBE_STDLIB_DIR` environment variable, which points the compiler directly to an alternative stdlib directory.
+</Note>
+
 | Import path       | Contents                                        |
 |-------------------|-------------------------------------------------|
 | `core.math`       | `square_int`, `clamp_int`, and arithmetic utils |
@@ -107,20 +111,19 @@ You can import as many modules as you need. There is no namespace prefix require
 
 ## Suture Package Imports
 
-Suture is the Mentalogue package registry. Distributed libraries are stored in the `.suture/` directory of the project root, under the path:
+Suture is the Mentalogue package registry. The compiler searches ancestor directories for a `.suture/` folder and resolves packages from two layouts inside it:
 
-```
-.suture/mlib/<package>/<version>/
-```
+- **Pre-compiled archives** — `.suture/mlib/<package>/<package>.mlib` or `.suture/mlib/<package>/<version>/<package>.mlib`
+- **Source packages** — `.suture/sources/<package>/lib.mtl` (or `main.mtl`)
 
-Each package is distributed as a compiled `.mlib` binary archive. Importing a Suture package uses the same dot-separated syntax:
+Importing a Suture package uses the same dot-separated syntax as any other import:
 
 ```
 import http.client
 import runtime.string
 ```
 
-The compiler resolves these paths against the `.suture/mlib/` tree before reporting a missing module error.
+The compiler walks up from the current file's directory until it finds a `.suture/` folder, then resolves the import from the layouts above.
 
 ## The `.mlib` Binary Library Format
 
@@ -136,7 +139,10 @@ All top-level functions in a `.mtl` file are **public** by default and are expor
 
 ```
 priv fn kind_from_code(code: int) -> Kind {
-    // Not visible to importers
+    let kind_from_code_table: [Kind; 7] = [
+        Kind.Invalid, Kind.Object, Kind.Array, Kind.String, Kind.Number, Kind.Bool, Kind.Null
+    ]
+    kind_from_code_table[code]
 }
 
 fn kind_code(kind: Kind) -> int {
@@ -173,7 +179,7 @@ fn main() -> int {
 }
 ```
 
-`core.math` and `io.console` are stdlib modules. `shared.bonus_math` is a local module at `shared/bonus_math.mtl` that presumably exports a `triple` function.
+`core.math` and `io.console` are stdlib modules. `shared.bonus_math` is a local module at `shared/bonus_math.mtl` that exports a `triple` function.
 
 <CodeGroup>
 ```title="import_local.mtl"

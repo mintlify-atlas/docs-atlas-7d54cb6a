@@ -1,5 +1,5 @@
 ---
-title: "Declaring and Calling Functions in Mentalogue"
+title: "Declaring and Calling Functions in the Mentalogue Language"
 sidebarTitle: "Functions"
 description: "How to declare, annotate, call, and compose functions in Mentalogue, including methods, visibility, early return, and the try operator."
 ---
@@ -32,7 +32,7 @@ The last expression in a block is the implicit return value of that block. You d
 fn main() -> int {
     let base = 4
     let extra = 3
-    base + extra        // this value is returned
+    base + extra
 }
 ```
 
@@ -62,8 +62,9 @@ let quotient = safe_divide(20, 4)
 
 The number of arguments must match the number of declared parameters exactly. Passing fewer or more arguments is a compile error:
 
+The following call is a compile error because `add` expects two arguments:
+
 ```
-// ERROR: add expects two arguments
 let bad = add(1)
 ```
 
@@ -101,7 +102,10 @@ All functions are **public** by default — they can be called from any module t
 
 ```
 priv fn kind_from_code(code: int) -> Kind {
-    // internal helper — not exported
+    let kind_from_code_table: [Kind; 7] = [
+        Kind.Invalid, Kind.Object, Kind.Array, Kind.String, Kind.Number, Kind.Bool, Kind.Null
+    ]
+    kind_from_code_table[code]
 }
 
 fn kind_code(kind: Kind) -> int {

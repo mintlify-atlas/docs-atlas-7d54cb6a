@@ -12,12 +12,17 @@ An ABI header is a 24-byte binary record identified by the magic bytes `INSCRIBE
 
 ### Targets and Calling Conventions
 
-| Target | Calling Convention |
+| Target | Native Calling Convention |
 |---|---|
 | `linux-x86_64` | `SystemV64` |
 | `windows-x86_64` | `Win64` (32-byte shadow space) |
 
-Both targets use a 64-bit pointer width. The `Win64` convention reserves 32 bytes of shadow space before every call; `SystemV64` requires no shadow space.
+Both targets use a 64-bit pointer width. The `Win64` convention reserves 32 bytes of shadow space before every call; `SystemV64` requires no shadow space. Two additional conventions are also defined:
+
+| Convention | Description |
+|---|---|
+| `C` | Portable C calling convention; accepted alongside any target's native convention during link validation |
+| `Mantelogue` | Inscribe-internal convention used for intra-module calls |
 
 ### Stability Levels
 
@@ -152,7 +157,7 @@ Each `ExternFunction` carries:
 - **`stability`** — must be `stable` or `deprecated` for the block to pass link validation
 
 <Warning>
-  Functions with `experimental` or `internal` stability are rejected by `ExternBlock::validate()` with the error: function is not stable enough for FFI export. All externally linked functions must be at least `stable`.
+  Functions with `experimental` or `internal` stability are rejected by `ExternBlock::validate()` with the error: function is not stable enough for FFI export. All externally linked functions must have a stability level that allows external linking (`stable` or `deprecated`).
 </Warning>
 
 ### FfiTypeMap
